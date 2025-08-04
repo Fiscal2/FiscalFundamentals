@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { BarChart, Bar, XAxis, XAxisProps, YAxis, Legend, ResponsiveContainer, LabelList, LabelProps } from 'recharts';
+import StockSearch from './components/layout/navbar/search/stock-search';
 
 interface FinancialRow {
   ticker: string;
@@ -33,11 +34,25 @@ const extractMetrics = (reportMap: Record<string, { label?: string; value?: numb
   let revenue = 0;
   let netIncome = 0;
 
-  const findKey = (partialKey: string) =>
-    Object.keys(reportMap).find(k => k.includes(partialKey));
+    const revenueKeys = [
+    'us-gaap_Revenues',
+    'us-gaap_RevenuesNetOfInterestExpense',
+    'us-gaap_SalesRevenueNet',
+    'us-gaap_SalesRevenueServicesNet'
+  ];
+  const incomeKeys = [
+    'us-gaap_ProfitLoss',
+    'us-gaap_NetIncomeLoss',
+    'us-gaap_NetIncomeLossAvailableToCommonStockholdersBasic'
+  ];
 
-  const revKey = findKey('us-gaap_RevenuesNetOfInterestExpense');
-  const niKey = findKey('us-gaap_NetIncomeLossAvailableToCommonStockholdersBasic');
+  const findByKeys = (keys: string[]) =>
+    keys.map(k =>
+      Object.keys(reportMap).find(key => key.includes(k))
+    ).find(k => k && reportMap[k]);
+
+  const revKey = findByKeys(revenueKeys);
+  const niKey = findByKeys(incomeKeys);
 
   if (revKey) revenue = reportMap[revKey].value ?? 0;
   if (niKey) netIncome = reportMap[niKey].value ?? 0;
@@ -49,7 +64,8 @@ const extractMetrics = (reportMap: Record<string, { label?: string; value?: numb
       if (
         label.includes('total net revenue') ||
         label.includes('net sales') ||
-        label.includes('revenue')
+        label.includes('revenue') ||
+        label.includes('total revenues')
       ) {
         revenue = reportMap[key].value ?? revenue;
         break;
@@ -156,19 +172,32 @@ const balanceChartData = data
 
     const reportMap: Record<string, ReportItem> = matchedReport?.map ?? {};
 
-    const strictGet = (map: Record<string, ReportItem>, exactLabel: string) => {
+    const strictGet = (map: Record<string, ReportItem>, labels: string | string[]): number | null => {
+      const normalize = (str: string) =>
+        str.toLowerCase()
+          .replace(/[’‘]/g, "'") // normalize curly quotes to straight
+          .replace(/\s+/g, ' ')  // normalize whitespace
+          .trim();
+
+      const targets = (Array.isArray(labels) ? labels : [labels]).map(normalize);
+
       for (const key in map) {
         const label = map[key]?.label;
-        if (label === exactLabel) {
-          return map[key].value;
-        }
+        if (!label) continue;
+        const normalized = normalize(label);
+        if (targets.includes(normalized)) return map[key].value;
       }
+
       return null;
     };
 
+
     const totalAssets = strictGet(reportMap, "Total assets");
-    const totalLiabilities = strictGet(reportMap, "Total liabilities");
-    const totalEquity = strictGet(reportMap, "Total stockholders’ equity");
+    const totalEquity = strictGet(reportMap, ["Total stockholders’ equity", "Total shareholders’ equity", "Total shareholders' equity", "total shareholders' equity", "total equity", "total shareholders' equity (deficit)", "Total stockholders’ (deficit) equity", "Total stockholders’ equity (deficit)"]);
+    const totalLiabilities = 
+      typeof totalAssets === 'number' && typeof totalEquity === 'number'
+        ? totalAssets - totalEquity
+        : null;
 
     return {
       year: row.year,
@@ -191,20 +220,29 @@ const cashFlowChartData = data
 
     const reportMap: Record<string, ReportItem> = matchedReport?.map ?? {};
 
-    const strictGet = (map: Record<string, ReportItem>, labels: string | string[]) => {
-      const targets = Array.isArray(labels) ? labels : [labels];
+    const strictGet = (map: Record<string, ReportItem>, labels: string | string[]): number | null => {
+      const normalize = (str: string) =>
+        str.toLowerCase()
+          .replace(/[’‘]/g, "'") // normalize curly quotes to straight
+          .replace(/\s+/g, ' ')  // normalize whitespace
+          .trim();
+
+      const targets = (Array.isArray(labels) ? labels : [labels]).map(normalize);
+
       for (const key in map) {
         const label = map[key]?.label;
-        if (label && targets.includes(label)) {
-          return map[key].value;
-        }
+        if (!label) continue;
+        const normalized = normalize(label);
+        if (targets.includes(normalized)) return map[key].value;
       }
+
       return null;
     };
 
     const netCashChange = strictGet(
       reportMap,[
       "Net increase (decrease) in cash, cash equivalents and restricted cash",
+      "Net (decrease) increase in cash and cash equivalents and restricted cash",
       "Net increase (decrease) in cash and cash equivalents",
       "Net increase (decrease) in total cash and cash equivalents",
       "Net (decrease) increase in total cash and cash equivalents",
@@ -218,7 +256,14 @@ const cashFlowChartData = data
       "Net increase/(decrease) in cash and due from banks and deposits with banks",
       "Net cash (used in)/provided by investing activities",
       "Increase in cash and cash equivalents",
-      "Change in cash and cash equivalents"
+      "Change in cash and cash equivalents",
+      "Net change in cash and cash equivalents",
+      "Net increase in cash and cash equivalents, and restricted cash",
+      "Net increase in cash and cash equivalents",
+      "Cash and equivalents increase (decrease)",
+      "Cash, Cash Equivalents, Restricted Cash and Restricted Cash Equivalents, Period Increase (Decrease), Including Exchange Rate Effect, Total",
+      "Change in cash and due from banks",
+      "Increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents"
     ]);
 
     return {
@@ -305,17 +350,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
       <h1 className="text-2xl font-bold mb-4">Financial Dashboard</h1>
 
       <div className="grid grid-cols-4 gap-4">
-        {uniqueTickers.map(ticker => (
-          <button
-            key={ticker}
-            onClick={() => setSelected(ticker)}
-            className={`rounded px-4 py-2 border ${
-              selected === ticker ? 'text-white' : 'bg-white text-black border-gray-300'
-            }`}
-          >
-            {ticker}
-          </button>
-        ))}
+        <StockSearch allTickers={uniqueTickers} onSelect={setSelected} />
       </div>
 
       {selected && (
@@ -387,84 +422,115 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                   const parsed: IncomeReport[] = JSON.parse(selectedRow.income_statement);
                   const reportMap = parsed[0]?.map ?? {};
 
-                  const fuzzyGet = (map: Record<string, ReportItem>, aliases: string[]) => {
+                  const strictGet = (map: Record<string, ReportItem>, labels: string | string[]): number | null => {
                     const normalize = (str: string) =>
-                      str.toLowerCase().replace(/[^a-z0-9]/g, ''); // remove all non-alphanumeric characters
+                        str.toLowerCase()
+                          .replace(/[’‘]/g, "'") // normalize curly quotes to straight
+                          .replace(/\s+/g, ' ')  // normalize whitespace
+                          .trim();
 
-                    const normalizedAliases = aliases.map(alias => normalize(alias));
+                      const targets = (Array.isArray(labels) ? labels : [labels]).map(normalize);
 
-                    for (const key in map) {
-                      const label = map[key]?.label || '';
-                      const normalizedLabel = normalize(label);
+                      for (const key in map) {
+                        const label = map[key]?.label;
+                          if (!label) continue;
+                            const normalized = normalize(label);
+                            if (targets.includes(normalized)) return map[key].value;
+                          }
 
-                      if (normalizedAliases.includes(normalizedLabel)) {
-                        return map[key].value;
-                      }
-                    }
-
-                    return null;
-                  };
+                      return null;
+                    };
 
 
                   const { revenue, netIncome } = extractMetrics(reportMap);
                   const netProfitMargin = revenue ? (netIncome / revenue) * 100 : null;
 
-                  const incomeTax = fuzzyGet(reportMap, [
+                  const incomeTax = strictGet(reportMap, [
                     "income tax expense",
                     "provision for income taxes",
                     "income tax expense (benefit)",
-                    "income tax provision"
+                    "income tax provision",
+                    "(Benefit from) provision for income taxes",
+                    "benefit (provision) for income taxes",
+                    "income tax provision (benefit)",
+                    "applicable income taxes"
                   ]);
 
-                  const preTaxIncome = fuzzyGet(reportMap, [
+                  const preTaxIncome = strictGet(reportMap, [
                     "income before income taxes",
+                    "income before income tax",
                     "income/(loss) before income tax expense/(benefit)",
                     "earnings before taxes",
+                    "earnings before provision for income taxes",
                     "pretax income",
                     "income before provision for income taxes",
                     "total",
                     "income from continuing operations before income taxes",
                     "(benefit from) provision for income taxes",
+                    "Income before income taxes and equity income",
+                    "Income (loss) before income taxes"
                   ]);
+                  console.log("Income tax:", incomeTax)
+                  console.log("Pre Tax Income:", preTaxIncome)
                   const effectiveTaxRate =
                     typeof incomeTax === 'number' &&
                     typeof preTaxIncome === 'number' &&
                     preTaxIncome !== 0
-                      ? (incomeTax / preTaxIncome) * 100
+                      ? Math.abs((incomeTax / preTaxIncome) * 100)
                       : null;
 
-                  // console.log("Selected:", selected);
-                  // console.log("Year:", selectedYear);
-                  // console.log("Income Tax:", incomeTax);
-                  // console.log("Pre-Tax Income:", preTaxIncome);
-                  // console.log("Effective Tax Rate:", effectiveTaxRate);
+                  let operatingExpense = strictGet(reportMap, [
+                    "operating expense",
+                    "operating expenses",
+                    "total operating expenses",
+                    "costs and expenses",
+                    "operating costs",
+                    "operating income and expense",
+                    "operating expense (excluding depreciation)",
+                    "total costs and expenses",
+                    "total expenses",
+                    "total noninterest expense",
+                    "total expenses excluding interest",
+                    "total operating costs and expenses"
+                  ]);
+
+                  if (operatingExpense === null) {
+
+                    const expenseLabels = [
+                      "selling, general and administrative",
+                      "sg&a",
+                      "administrative expenses",
+                      "general and administrative",
+                      "sales and marketing",
+                      "marketing",
+                      "technology and development"
+                    ];
+
+                    let sgna = 0;
+
+                    for (const label of expenseLabels) {
+                      const val = strictGet(reportMap, [label]);
+                      if (typeof val === "number") sgna += val;
+                    }
+
+                    operatingExpense = sgna > 0 ? sgna : null;
+
+                  }
 
                   const rows = [
                     { label: "Revenue", value: revenue},
-                    { label: "Operating expense", value: fuzzyGet(reportMap, [
-                      "operating expense",
-                      "operating expenses",
-                      "total operating expenses",
-                      "costs and expenses",
-                      "operating costs",
-                      "operating income and expense",
-                      "operating expense (excluding depreciation)",
-                      "total costs and expenses",
-                      "cost of revenue and operating expenses",
-                      "cost of revenues",
-                      "total expenses",
-                      "total noninterest expense",
-                      "Total expenses excluding interest",
-
-                    ]) },
+                    { label: "Operating expense", value: operatingExpense},
                     { label: "Net income", value: netIncome },
                     { label: "Net profit margin", value: netProfitMargin },
-                    { label: "Earnings per share", value: fuzzyGet(reportMap, [
+                    { label: "Earnings per share", value: strictGet(reportMap, [
                       "Basic (in dollars per share)",
+                      "Basic",
                       "Basic (in USD per share)",
                       "Earnings Per Share, Basic, Total",
                       "Basic earnings per share",
                       "Basic net income per share",
+                      "Earnings per common share (in dollars per share)",
+                      "Earnings per common share",
                       "Basic earnings per share (in dollars per share)",
                       "Basic net income per share (in dollars per share)",
                       "Basic net income per share of Class A, Class B, and Class C stock (in dollars per share)",
@@ -528,14 +594,22 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                         const reportMap = matchedReport?.map ?? {};
 
 
-                        const strictGet = (map: Record<string, ReportItem>, exactLabels: string | string[]) => {
-                          const labels = Array.isArray(exactLabels) ? exactLabels : [exactLabels];
+                        const strictGet = (map: Record<string, ReportItem>, labels: string | string[]): number | null => {
+                          const normalize = (str: string) =>
+                            str.toLowerCase()
+                              .replace(/[’‘]/g, "'") // normalize curly quotes to straight
+                              .replace(/\s+/g, ' ')  // normalize whitespace
+                              .trim();
+
+                          const targets = (Array.isArray(labels) ? labels : [labels]).map(normalize);
+
                           for (const key in map) {
                             const label = map[key]?.label;
-                            if (labels.includes(label)) {
-                              return map[key].value;
-                            }
+                            if (!label) continue;
+                            const normalized = normalize(label);
+                            if (targets.includes(normalized)) return map[key].value;
                           }
+
                           return null;
                         };
 
@@ -543,30 +617,65 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                           for (const key in map) {
                             const label = map[key]?.label;
                             if (!label) continue;
+                            const cleanLabel = label.replace(/\u00a0/g, ' '); // Replace non-breaking spaces
 
-                            // Match patterns like: 12,211 (Class A...) shares issued and outstanding
-                            const match = label.match(/([0-9,]+)\s*\((Class.*?)\)\s*shares issued and outstanding/i);
-                            if (match) {
-                              const num = parseInt(match[1].replace(/,/g, ''), 10);
-                              return !isNaN(num) ? num * 1_000_000 : null;
+                            const isExplicitlyInShares = /in shares/i.test(cleanLabel);
+
+                            // 1. Match: "X and Y shares issued and outstanding"
+                            const multiMatch = cleanLabel.match(/([\d,]+)\s+and\s+([\d,]+)\s+shares issued and outstanding/i);
+                            if (multiMatch) {
+                              const num1 = parseInt(multiMatch[1].replace(/,/g, ''), 10);
+                              const num2 = parseInt(multiMatch[2].replace(/,/g, ''), 10);
+                              const maxNum = Math.max(num1, num2);
+                              return !isNaN(maxNum) ? (isExplicitlyInShares ? maxNum : maxNum * 1_000_000) : null;
                             }
 
-                            // Fallback pattern: 12,211 shares issued and outstanding
-                            const fallback = label.match(/([0-9,]+)\s+shares (?:issued and )?outstanding/i);
-                            if (fallback) {
+                            // 2. Match: "X shares issued and outstanding as of ..."
+                            const datedMatch = cleanLabel.match(/([\d,]+)\s+shares issued and outstanding\s+as of/i);
+                            if (datedMatch) {
+                              const num = parseInt(datedMatch[1].replace(/,/g, ''), 10);
+                              return !isNaN(num) ? (isExplicitlyInShares ? num : num * 1_000_000) : null;
+                            }
+
+                            // 3. Match: "X shares issued and outstanding"
+                            const fallback = cleanLabel.match(/([\d,]+)\s+shares issued and outstanding/i);
+                            if (fallback && !cleanLabel.toLowerCase().includes("authorized")) {
                               const num = parseInt(fallback[1].replace(/,/g, ''), 10);
-                              return !isNaN(num) ? num * 1_000_000 : null;
+                              return !isNaN(num) ? (isExplicitlyInShares ? num : num * 1_000_000) : null;
+                            }
+
+                            // 4. Direct "Common stock, shares outstanding (in shares)"
+                            if (/shares outstanding/i.test(cleanLabel) && isExplicitlyInShares) {
+                              const num = map[key].value;
+                              return !isNaN(num) ? (isExplicitlyInShares ? num : num * 1_000_000) : null;
+                            }
+
+                            // 5. Match: "outstanding: X shares at [date] and Y shares at [date]"
+                            const outstandingMatch = cleanLabel.match(/outstanding:\s*([\d,]+)\s+shares/i);
+                            if (outstandingMatch) {
+                              const num = parseInt(outstandingMatch[1].replace(/,/g, ''), 10);
+                              return !isNaN(num) ? (isExplicitlyInShares ? num : num * 1_000_000) : null;
                             }
                           }
 
                           return null;
                         };
 
+
+
                         const totalAssets = strictGet(reportMap, "Total assets");
-                        const totalLiabilities = strictGet(reportMap, "Total liabilities");
-                        const totalEquity = strictGet(reportMap, ["Total stockholders’ equity", "Total shareholders’ equity", "Total shareholders' equity"]);
-                        const preferredEquity = strictGet(reportMap, ["Preferred equity", "Preferred stock"]) ?? 0;
+                        const totalEquity = strictGet(reportMap, ["Total stockholders’ equity", "Total shareholders’ equity", "Total shareholders' equity", "total shareholders' equity", "total equity", "total shareholders' equity (deficit)", "Total stockholders’ (deficit) equity", "Total stockholders’ equity (deficit)"]);
+                        const totalLiabilities = 
+                          typeof totalAssets === 'number' && typeof totalEquity === 'number'
+                            ? totalAssets - totalEquity
+                            : null;
+                        const preferredEquity = strictGet(reportMap, ["Preferred equity", "Preferred stock", "Preferred stock, $0.001 par value; 2 shares authorized; none issued"]) ?? 0;
                         const sharesOutstanding = extractSharesOutstanding(reportMap);
+    
+                        // console.log("Equity:", totalEquity);
+                        // console.log("Preferred Equity:", preferredEquity);
+                        // console.log("Shares Outstanding:", sharesOutstanding);
+
 
                         const bookValuePerShare =
                           typeof totalEquity === 'number' &&
@@ -575,6 +684,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             ? (totalEquity - preferredEquity) / sharesOutstanding
                             : null;
 
+                        // console.log("Book Value Per Share:", bookValuePerShare);
 
                         const rows = [
                           { label: "Total assets", value: totalAssets },
@@ -691,12 +801,22 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
                         const reportMap = matchedReport?.map ?? {};
 
-                        const strictGet = (map: Record<string, ReportItem>, labels: string | string[]) => {
-                          const all = Array.isArray(labels) ? labels : [labels];
+                        const strictGet = (map: Record<string, ReportItem>, labels: string | string[]): number | null => {
+                          const normalize = (str: string) =>
+                            str.toLowerCase()
+                              .replace(/[’‘]/g, "'") // normalize curly quotes to straight
+                              .replace(/\s+/g, ' ')  // normalize whitespace
+                              .trim();
+
+                          const targets = (Array.isArray(labels) ? labels : [labels]).map(normalize);
+
                           for (const key in map) {
                             const label = map[key]?.label;
-                            if (all.includes(label)) return map[key].value;
+                            if (!label) continue;
+                            const normalized = normalize(label);
+                            if (targets.includes(normalized)) return map[key].value;
                           }
+
                           return null;
                         };
 
@@ -707,7 +827,8 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Cash generated by operating activities",
                             "Net cash provided by/(used in) operating activities",
                             "Net cash (used in)/provided by operating activities",
-                            "Cash flows from operating activities"
+                            "Cash flows from operating activities",
+                            "Cash provided by operations"
                           ]);
                         const netInvesting = strictGet(
                           reportMap, [
@@ -722,12 +843,14 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Net cash (used in) investing activities",
                             "Net cash provided by/(used in) investing activities",
                             "Net cash (used in)/provided by investing activities",
-                            "Cash flows used for investing activities"
+                            "Cash flows used for investing activities",
+                            "Cash used for investing activities"
 
                           ]);
                         const netFinancing = strictGet(
                           reportMap, [
-                            "Net cash provided by (used in) financing activities", 
+                            "Net cash provided by (used in) financing activities",
+                            "Net cash (used in) provided by financing activities",
                             "Net cash provided by financing activities",
                             "Net cash used in financing activities",
                             "Net cash used by financing activities",
@@ -735,13 +858,15 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Net cash provided by/(used in) financing activities",
                             "Cash flows (used for) from financing activities",
                             "Cash flows from (used for) financing activities",
-                            "Cash flows used for financing activities"
+                            "Cash flows used for financing activities",
+                            "Cash used for financing activities"
 
                             
                           ]);
                         const netCashChange = strictGet(
                           reportMap,[
                             "Net increase (decrease) in cash, cash equivalents and restricted cash",
+                            "Net (decrease) increase in cash and cash equivalents and restricted cash",
                             "Net increase (decrease) in cash and cash equivalents",
                             "Net increase (decrease) in total cash and cash equivalents",
                             "Cash, cash equivalents and restricted cash, net increase (decrease)",
@@ -754,7 +879,14 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Decrease in cash, cash equivalents and restricted cash",
                             "Net increase/(decrease) in cash and due from banks and deposits with banks",
                             "Increase in cash and cash equivalents",
-                            "Change in cash and cash equivalents"
+                            "Change in cash and cash equivalents",
+                            "Net change in cash and cash equivalents",
+                            "Net increase in cash and cash equivalents, and restricted cash",
+                            "Net increase in cash and cash equivalents",
+                            "Cash and equivalents increase (decrease)",
+                            "Cash, Cash Equivalents, Restricted Cash and Restricted Cash Equivalents, Period Increase (Decrease), Including Exchange Rate Effect, Total",
+                            "Change in cash and due from banks",
+                            "Increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents"
 
                           ]);
 
