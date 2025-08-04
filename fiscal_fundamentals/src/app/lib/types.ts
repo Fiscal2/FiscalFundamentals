@@ -11,3 +11,8 @@ export type Card = {
     };
   };
 };
+
+export type StockItem = {
+  ticker: string;
+  companyName: string;
+};

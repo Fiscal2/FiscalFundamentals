@@ -4,9 +4,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { BarChart, Bar, XAxis, XAxisProps, YAxis, Legend, ResponsiveContainer, LabelList, LabelProps } from 'recharts';
 import StockSearch from './components/layout/navbar/search/stock-search';
+import { StockItem } from './lib/types';
 
 interface FinancialRow {
   ticker: string;
+  company_name?: string;
   year: number;
   quarter: number;
   income_statement: string;
@@ -130,7 +132,20 @@ useEffect(() => {
 }, [selected, data]);
 
 
-  const uniqueTickers = [...new Set(data.map(d => d.ticker))];
+const uniqueTickers: StockItem[] = Array.from(
+  new Map(
+    data
+      .filter(row => row.quarter === 0)
+      .map(row => [
+        row.ticker,
+        {
+          ticker: row.ticker,
+          companyName: row.company_name?.trim() || 'Unknown'
+        }
+      ])
+  ).values()
+);
+
 
   interface IncomeReport {
   date: string;
