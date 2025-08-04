@@ -45,6 +45,10 @@ export default function StockSearch({
     }
   }
 
+  function formatCompanyName(name: string): string {
+  return name.replace(/[^A-Z0-9 ]/gi, '').toUpperCase().trim();
+}
+
   return (
     <div className="relative mb-4 w-full max-w-sm">
       <input
@@ -67,7 +71,7 @@ export default function StockSearch({
                 setFiltered([]);
               }}
             >
-              <span className="font-semibold">{ticker}</span> — {companyName}
+              <span className="font-semibold">{ticker}</span> — {formatCompanyName(companyName)}
             </li>
           ))}
         </ul>

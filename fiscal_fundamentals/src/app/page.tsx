@@ -542,6 +542,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                       "Basic",
                       "Basic (in USD per share)",
                       "Earnings Per Share, Basic, Total",
+                      "Earnings per common share–basic",
                       "Basic earnings per share",
                       "Basic net income per share",
                       "Earnings per common share (in dollars per share)",
@@ -557,7 +558,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                   return (
                     <table className="w-full mt-4 text-sm border-t">
                       <thead>
-                        <tr className="text-left text-gray-600 border-b">
+                        <tr className="text-left text-gray-400 border-b">
                           <th className="py-2">Metric</th>
                           <th className="py-2">Value</th>
                         </tr>
@@ -765,7 +766,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
                           <table className="w-full mt-4 text-sm border-t">
                             <thead>
-                              <tr className="text-left text-gray-600 border-b">
+                              <tr className="text-left text-gray-400 border-b">
                                 <th className="py-2">Metric</th>
                                 <th className="py-2">Value</th>
                               </tr>
@@ -961,7 +962,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
                           <table className="w-full mt-4 text-sm border-t">
                             <thead>
-                              <tr className="text-left text-gray-600 border-b">
+                              <tr className="text-left text-gray-400 border-b">
                                 <th className="py-2">Metric</th>
                                 <th className="py-2">Value</th>
                               </tr>
