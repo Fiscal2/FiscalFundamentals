@@ -9,10 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.7",
     "@heroicons/react": "^2.2.0",
     "@radix-ui/react-tabs": "^1.1.12",
     "@shadcn/ui": "^0.0.4",
     "@tanstack/react-table": "^8.21.3",
+    "framer-motion": "^12.23.12",
     "fuse.js": "^7.1.0",
     "next": "15.3.5",
     "react": "^19.1.0",

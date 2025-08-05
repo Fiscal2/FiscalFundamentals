@@ -3,16 +3,20 @@
 import { useState, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { StockItem } from '@/app/lib/types';
+import { useRouter } from 'next/navigation';
 
 export default function StockSearch({
   allTickers,
-  onSelect
+  onSelect,
+  navigateToDashboard = false
 }: {
   allTickers: StockItem[];
   onSelect: (ticker: string) => void;
+  navigateToDashboard?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const [filtered, setFiltered] = useState<StockItem[]>([]);
+  const router = useRouter();
 
   const fuse = useMemo(() => {
     return new Fuse(allTickers, {
@@ -33,14 +37,22 @@ export default function StockSearch({
     setFiltered(results.map(r => r.item));
   }, [search, fuse]);
 
+    function handleSelect(ticker: string) {
+        if (navigateToDashboard) {
+        router.push(`/dashboard?ticker=${ticker}`);
+        } else {
+        onSelect(ticker);
+        }
+        setSearch('');
+        setFiltered([]);
+    }
+
    function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
       const match = filtered[0];
 
       if (match) {
-        onSelect(match.ticker);
-        setSearch('');
-        setFiltered([]);
+        handleSelect(match.ticker);
       }
     }
   }
@@ -65,11 +77,7 @@ export default function StockSearch({
             <li
               key={ticker}
               className="cursor-pointer px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              onClick={() => {
-                onSelect(ticker);
-                setSearch('');
-                setFiltered([]);
-              }}
+              onClick={() => handleSelect(ticker)}
             >
               <span className="font-semibold">{ticker}</span> — {formatCompanyName(companyName)}
             </li>

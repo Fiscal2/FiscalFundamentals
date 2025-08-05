@@ -16,3 +16,8 @@ export type StockItem = {
   ticker: string;
   companyName: string;
 };
+
+export type MenuItem = {
+  title: string;
+  path: string;
+};
