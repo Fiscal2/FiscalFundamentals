@@ -32,7 +32,7 @@ type ReportItem = {
   value: number;
 };
 
-const extractMetrics = (reportMap: Record<string, { label?: string; value?: number }>) => {
+const extractMetrics = (rawMap: Record<string, { label?: string; value?: number }>) => {
   let revenue = 0;
   let netIncome = 0;
 
@@ -49,43 +49,53 @@ const extractMetrics = (reportMap: Record<string, { label?: string; value?: numb
     'us-gaap_NetIncomeLossAvailableToCommonStockholdersBasic'
   ];
 
-  const findByKeys = (keys: string[]) =>
-    keys.map(k =>
-      Object.keys(reportMap).find(key => key.includes(k))
-    ).find(k => k && reportMap[k]);
+  const normalizedEntries: [string, { label?: string; value?: number }][] =
+    Object.entries(rawMap).map(([key, val]) => {
+      const match = key.toLowerCase().match(/defref_(.*)/);
+      const normKey = match ? match[1] : key.toLowerCase();
+      return [normKey, val];
+    });
 
-  const revKey = findByKeys(revenueKeys);
-  const niKey = findByKeys(incomeKeys);
+  const findByKeys = (priorityKeys: string[]) => {
+    for (const searchKey of priorityKeys.map(k => k.toLowerCase())) {
+      const entry = normalizedEntries.find(([k]) => k === searchKey);
+      if (entry) return entry[1];
+    }
+    return undefined;
+  };
 
-  if (revKey) revenue = reportMap[revKey].value ?? 0;
-  if (niKey) netIncome = reportMap[niKey].value ?? 0;
+  const revMatch = findByKeys(revenueKeys);
+  const niMatch = findByKeys(incomeKeys);
+
+  if (revMatch) revenue = revMatch.value ?? 0;
+  if (niMatch) netIncome = niMatch.value ?? 0;
 
   // Fallback to fuzzy label search
   if (!revenue) {
-    for (const key in reportMap) {
-      const label = reportMap[key]?.label?.toLowerCase() || '';
+    for (const [, val] of normalizedEntries) {
+      const label = val?.label?.toLowerCase() || '';
       if (
         label.includes('total net revenue') ||
         label.includes('net sales') ||
         label.includes('revenue') ||
         label.includes('total revenues')
       ) {
-        revenue = reportMap[key].value ?? revenue;
+        revenue = val.value ?? revenue;
         break;
       }
     }
   }
 
   if (!netIncome) {
-    for (const key in reportMap) {
-      const label = reportMap[key]?.label?.toLowerCase() || '';
+    for (const [, val] of normalizedEntries) {
+      const label = val?.label?.toLowerCase() || '';
       if (
         label.includes('net income applicable') ||
         label.includes('net income') ||
         label.includes('net earnings') ||
         label.includes('net profit')
       ) {
-        netIncome = reportMap[key].value ?? netIncome;
+        netIncome = val.value ?? netIncome;
         break;
       }
     }
@@ -273,7 +283,8 @@ const cashFlowChartData = data
       "Cash and equivalents increase (decrease)",
       "Cash, Cash Equivalents, Restricted Cash and Restricted Cash Equivalents, Period Increase (Decrease), Including Exchange Rate Effect, Total",
       "Change in cash and due from banks",
-      "Increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents"
+      "Increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents",
+      "Increase (Decrease) in Cash and Cash Equivalents, including Amounts Restricted"
     ]);
 
     return {
@@ -459,7 +470,8 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                     "(Benefit from) provision for income taxes",
                     "benefit (provision) for income taxes",
                     "income tax provision (benefit)",
-                    "applicable income taxes"
+                    "applicable income taxes",
+                    "taxes on income"
                   ]);
 
                   const preTaxIncome = strictGet(reportMap, [
@@ -473,8 +485,9 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                     "total",
                     "income from continuing operations before income taxes",
                     "(benefit from) provision for income taxes",
-                    "Income before income taxes and equity income",
-                    "Income (loss) before income taxes"
+                    "income before income taxes and equity income",
+                    "income (loss) before income taxes",
+                    "income before taxes on income"
                   ]);
                   console.log("Income tax:", incomeTax)
                   console.log("Pre Tax Income:", preTaxIncome)
@@ -539,6 +552,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                       "Basic",
                       "Basic (in USD per share)",
                       "Earnings Per Share, Basic, Total",
+                      "Earnings (in dollars per share)",
                       "Earnings per common share–basic",
                       "Basic earnings per share",
                       "Basic net income per share",
@@ -547,7 +561,8 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                       "Basic earnings per share (in dollars per share)",
                       "Basic net income per share (in dollars per share)",
                       "Basic net income per share of Class A, Class B, and Class C stock (in dollars per share)",
-                      "Basic net income per share of Class A and B common stock and Class C capital stock (in dollars per share)"
+                      "Basic net income per share of Class A and B common stock and Class C capital stock (in dollars per share)",
+                      "Basic net income per common share attributable to walmart (in USD per share)"
                     ]) },
                     { label: "Effective tax rate", value: effectiveTaxRate },
                   ];
@@ -841,7 +856,8 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Net cash provided by/(used in) operating activities",
                             "Net cash (used in)/provided by operating activities",
                             "Cash flows from operating activities",
-                            "Cash provided by operations"
+                            "Cash provided by operations",
+                            "Net cash provided by (used for) operating activities"
                           ]);
                         const netInvesting = strictGet(
                           reportMap, [
@@ -857,7 +873,8 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Net cash provided by/(used in) investing activities",
                             "Net cash (used in)/provided by investing activities",
                             "Cash flows used for investing activities",
-                            "Cash used for investing activities"
+                            "Cash used for investing activities",
+                            "Net cash provided by (used for) investing activities"
 
                           ]);
                         const netFinancing = strictGet(
@@ -872,7 +889,8 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Cash flows (used for) from financing activities",
                             "Cash flows from (used for) financing activities",
                             "Cash flows used for financing activities",
-                            "Cash used for financing activities"
+                            "Cash used for financing activities",
+                            "Net cash provided by (used for) financing activities"
 
                             
                           ]);
@@ -899,7 +917,8 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Cash and equivalents increase (decrease)",
                             "Cash, Cash Equivalents, Restricted Cash and Restricted Cash Equivalents, Period Increase (Decrease), Including Exchange Rate Effect, Total",
                             "Change in cash and due from banks",
-                            "Increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents"
+                            "Increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents",
+                            "Increase (Decrease) in Cash and Cash Equivalents, including Amounts Restricted"
 
                           ]);
 
