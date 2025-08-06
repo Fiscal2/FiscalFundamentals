@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { StockItem } from '@/app/lib/types';
 import { useRouter } from 'next/navigation';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 export default function StockSearch({
   allTickers,
@@ -63,10 +64,11 @@ export default function StockSearch({
 
   return (
     <div className="relative mb-4 w-full max-w-sm">
+      <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-500 pointer-events-none" />
       <input
         type="text"
         placeholder="Search by ticker or company name"
-        className="w-full rounded-md border border-gray-300 p-2 dark:bg-neutral-800 dark:text-white"
+        className="w-full rounded-md text-white placeholder-neutral-500 border border-white/10 px-10 py-2 focus-visible:ring-2 focus-visible:ring-white/20"
         onKeyDown={handleKeyDown}
         value={search}
         onChange={(e) => setSearch(e.target.value)}

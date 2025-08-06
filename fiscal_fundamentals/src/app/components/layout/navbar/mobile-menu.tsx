@@ -33,7 +33,7 @@ export default function MobileMenu({ menu }: { menu: MenuItem[] }) {
       <Transition show={isOpen} as={Fragment}>
         <Dialog onClose={closeMobileMenu} className="relative z-50">
           <Transition.Child
-            as={Fragment}
+            as="div"
             enter="transition-opacity ease-linear duration-300"
             enterFrom="opacity-0"
             enterTo="opacity-100"
@@ -45,7 +45,7 @@ export default function MobileMenu({ menu }: { menu: MenuItem[] }) {
           </Transition.Child>
 
           <Transition.Child
-            as={Fragment}
+            as="div"
             enter="transition-transform ease-in-out duration-300"
             enterFrom="-translate-x-full"
             enterTo="translate-x-0"

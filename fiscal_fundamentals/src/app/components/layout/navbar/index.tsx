@@ -74,12 +74,12 @@ export function Navbar() {
               {SITE_NAME_LINE_1}<br />{SITE_NAME_LINE_2}
             </div>
           </Link>
-          <ul className="hidden gap-6 text-sm md:flex md:items-center">
+          <ul className="hidden gap-2 text-sm md:flex md:items-center">
             {MENU_ITEMS.map((item) => (
               <li key={item.title}>
                 <Link
                   href={item.path}
-                  className="text-neutral-500 underline-offset-4 hover:text-black hover:underline dark:text-neutral-400 dark:hover:text-neutral-300"
+                  className="px-3 py-1 rounded-full transition-colors underline-offset-4 hover:bg-white/10"
                 >
                   {item.title}
                 </Link>

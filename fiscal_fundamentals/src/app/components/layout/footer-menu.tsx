@@ -12,7 +12,7 @@ export default function FooterMenu() {
   return (
     <nav className="flex space-x-6">
       {links.map(({ href, label }) => (
-        <Link key={href} href={href} className="text-sm hover:text-white transition">
+        <Link key={href} href={href} className="text-sm hover:text-white transition hover:underline">
           {label}
         </Link>
       ))}
