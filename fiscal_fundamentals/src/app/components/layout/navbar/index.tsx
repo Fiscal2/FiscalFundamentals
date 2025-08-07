@@ -69,8 +69,8 @@ export function Navbar() {
             prefetch={true}
             className="mr-5 flex w-full items-center justify-center md:w-auto lg:mr-6"
           >
-            <Image src="/castlingFinancialPieces.png" alt="Logo" width={50} height={50} />
-            <div className="ml-4 mr-5 flex-none text-sm font-bold uppercase md:hidden lg:block">
+            <Image src="/castlingFinancialPieces.png" alt="Logo" width={50} height={50} className="rounded" />
+            <div className="ml-4 mr-5 flex-none text-sm font-bold md:hidden lg:block">
               {SITE_NAME_LINE_1}<br />{SITE_NAME_LINE_2}
             </div>
           </Link>

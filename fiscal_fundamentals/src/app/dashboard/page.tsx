@@ -44,8 +44,8 @@ const extractMetrics = (rawMap: Record<string, { label?: string; value?: number 
     'us-gaap_SalesRevenueServicesNet',
   ];
   const incomeKeys = [
-    'us-gaap_ProfitLoss',
     'us-gaap_NetIncomeLoss',
+    'us-gaap_ProfitLoss',
     'us-gaap_NetIncomeLossAvailableToCommonStockholdersBasic'
   ];
 
@@ -284,7 +284,12 @@ const cashFlowChartData = data
       "Cash, Cash Equivalents, Restricted Cash and Restricted Cash Equivalents, Period Increase (Decrease), Including Exchange Rate Effect, Total",
       "Change in cash and due from banks",
       "Increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents",
-      "Increase (Decrease) in Cash and Cash Equivalents, including Amounts Restricted"
+      "Increase (Decrease) in Cash and Cash Equivalents, including Amounts Restricted",
+      "Net increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents",
+      "Net (decrease) increase in cash, cash equivalents, restricted cash and restricted cash equivalents",
+      "Net increase (decrease) in cash and cash equivalents, and restricted cash and cash equivalents",
+      "Net increase/(decrease) in cash & cash equivalents, including restricted",
+      "Net (decrease)/increase in cash & cash equivalents, including restricted"
     ]);
 
     return {
@@ -469,9 +474,13 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                     "income tax provision",
                     "(Benefit from) provision for income taxes",
                     "benefit (provision) for income taxes",
+                    "provision for (benefit from) income taxes",
                     "income tax provision (benefit)",
                     "applicable income taxes",
-                    "taxes on income"
+                    "taxes on income",
+                    "income tax benefit/(expense)",
+                    "income tax (expense)/benefit",
+                    "income tax benefit"
                   ]);
 
                   const preTaxIncome = strictGet(reportMap, [
@@ -487,7 +496,13 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                     "(benefit from) provision for income taxes",
                     "income before income taxes and equity income",
                     "income (loss) before income taxes",
-                    "income before taxes on income"
+                    "income before taxes on income",
+                    "loss before income taxes",
+                    "income (loss) before income taxes and income (loss) from equity method investments",
+                    "income (loss) before income taxes and income from equity method investments",
+                    "income (loss) before income taxes and loss from equity method investments",
+                    "loss before income taxes and loss from equity method investments",
+                    "loss before income taxes and income (loss) from equity method investments",
                   ]);
                   console.log("Income tax:", incomeTax)
                   console.log("Pre Tax Income:", preTaxIncome)
@@ -544,7 +559,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
                   const rows = [
                     { label: "Revenue", value: revenue},
-                    { label: "Operating expense", value: operatingExpense},
+                    { label: "Operating expense", value: Math.abs(operatingExpense ?? 0)},
                     { label: "Net income", value: netIncome },
                     { label: "Net profit margin", value: netProfitMargin },
                     { label: "Earnings per share", value: strictGet(reportMap, [
@@ -562,7 +577,11 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                       "Basic net income per share (in dollars per share)",
                       "Basic net income per share of Class A, Class B, and Class C stock (in dollars per share)",
                       "Basic net income per share of Class A and B common stock and Class C capital stock (in dollars per share)",
-                      "Basic net income per common share attributable to walmart (in USD per share)"
+                      "Basic net income per common share attributable to walmart (in USD per share)",
+                      "Net income (loss) per share, basic (in usd per share)",
+                      "Net loss per share, basic (in USD per share)",
+                      "Basic loss per share (in dollars per share)",
+                      "Basic loss per share"
                     ]) },
                     { label: "Effective tax rate", value: effectiveTaxRate },
                   ];
@@ -857,7 +876,11 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Net cash (used in)/provided by operating activities",
                             "Cash flows from operating activities",
                             "Cash provided by operations",
-                            "Net cash provided by (used for) operating activities"
+                            "Net cash provided by (used for) operating activities",
+                            "Net cash used in operating activities",
+                            "Net cash used by operating activities",
+                            "Net cash provided/(used) by operating activities",
+                            "Net cash (used)/provided by operating activities"
                           ]);
                         const netInvesting = strictGet(
                           reportMap, [
@@ -874,7 +897,9 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Net cash (used in)/provided by investing activities",
                             "Cash flows used for investing activities",
                             "Cash used for investing activities",
-                            "Net cash provided by (used for) investing activities"
+                            "Net cash provided by (used for) investing activities",
+                            "Net cash provided/(used) by investing activities",
+                            "Net cash (used)/provided by investing activities"
 
                           ]);
                         const netFinancing = strictGet(
@@ -890,7 +915,10 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Cash flows from (used for) financing activities",
                             "Cash flows used for financing activities",
                             "Cash used for financing activities",
-                            "Net cash provided by (used for) financing activities"
+                            "Net cash provided by (used for) financing activities",
+                            "Net Cash Provided by (Used in) Financing Activities, Total",
+                            "Net cash (used)/provided by financing activities",
+                            "Net cash provided/(used) by financing activities"
 
                             
                           ]);
@@ -918,7 +946,12 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Cash, Cash Equivalents, Restricted Cash and Restricted Cash Equivalents, Period Increase (Decrease), Including Exchange Rate Effect, Total",
                             "Change in cash and due from banks",
                             "Increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents",
-                            "Increase (Decrease) in Cash and Cash Equivalents, including Amounts Restricted"
+                            "Increase (Decrease) in Cash and Cash Equivalents, including Amounts Restricted",
+                            "Net increase (decrease) in cash, cash equivalents, restricted cash and restricted cash equivalents",
+                            "Net (decrease) increase in cash, cash equivalents, restricted cash and restricted cash equivalents",
+                            "Net increase (decrease) in cash and cash equivalents, and restricted cash and cash equivalents",
+                            "Net increase/(decrease) in cash & cash equivalents, including restricted",
+                            "Net (decrease)/increase in cash & cash equivalents, including restricted"
 
                           ]);
 
