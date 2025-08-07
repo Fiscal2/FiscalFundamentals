@@ -63,14 +63,14 @@ export function Navbar() {
         </Suspense>
       </div>
       <div className="flex w-full items-center">
-        <div className="ml-4 flex w-full md:w-1/3">
+        <div className="ml-8 flex w-full md:w-1/3">
           <Link
             href="/"
             prefetch={true}
             className="mr-5 flex w-full items-center justify-center md:w-auto lg:mr-6"
           >
             <Image src="/castlingFinancialPieces.png" alt="Logo" width={50} height={50} className="rounded" />
-            <div className="ml-4 mr-5 flex-none text-sm font-bold md:hidden lg:block">
+            <div className="ml-2 mr-5 flex-none text-sm font-bold md:hidden lg:block">
               {SITE_NAME_LINE_1}<br />{SITE_NAME_LINE_2}
             </div>
           </Link>
