@@ -212,12 +212,31 @@ const balanceChartData = data
     };
 
 
-    const totalAssets = strictGet(reportMap, "Total assets");
-    const totalEquity = strictGet(reportMap, ["Total stockholders’ equity", "Total shareholders’ equity", "Total shareholders' equity", "total shareholders' equity", "total equity", "total shareholders' equity (deficit)", "Total stockholders’ (deficit) equity", "Total stockholders’ equity (deficit)"]);
-    const totalLiabilities = 
-      typeof totalAssets === 'number' && typeof totalEquity === 'number'
-        ? totalAssets - totalEquity
-        : null;
+    const totalAssets = strictGet(reportMap, ["Total assets", "Assets"]);
+    let totalEquity = strictGet(reportMap, ["Total stockholders’ equity", "Total shareholders’ equity", "Total shareholders' equity", "total shareholders' equity", "total equity", "total shareholders' equity (deficit)", "Total stockholders’ (deficit) equity", "Total stockholders’ equity (deficit)"]);
+    const explicitLiabilities = strictGet(reportMap, [
+      'Total liabilities',
+      'Total Liabilities',
+      'Liabilities'
+    ]);
+    // derive equity if missing and we have assets + explicit liabilities
+    if (
+      typeof totalEquity !== 'number' &&
+      typeof totalAssets === 'number' &&
+      typeof explicitLiabilities === 'number'
+    ) {
+      totalEquity = totalAssets - explicitLiabilities;
+    }
+
+    let totalLiabilities: number | null = null;
+    if (typeof explicitLiabilities === 'number') {
+      totalLiabilities= explicitLiabilities;
+    } else if (
+      typeof totalAssets === 'number' &&
+      typeof totalEquity === 'number'
+    ) {
+      totalLiabilities = totalAssets - totalEquity;
+    }
 
     return {
       year: row.year,
@@ -289,7 +308,9 @@ const cashFlowChartData = data
       "Net (decrease) increase in cash, cash equivalents, restricted cash and restricted cash equivalents",
       "Net increase (decrease) in cash and cash equivalents, and restricted cash and cash equivalents",
       "Net increase/(decrease) in cash & cash equivalents, including restricted",
-      "Net (decrease)/increase in cash & cash equivalents, including restricted"
+      "Net (decrease)/increase in cash & cash equivalents, including restricted",
+      "Net increase (decrease) in cash, cash equivalents, and restricted cash",
+      "Net Increase (Decrease)"
     ]);
 
     return {
@@ -470,6 +491,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                   const incomeTax = strictGet(reportMap, [
                     "income tax expense",
                     "provision for income taxes",
+                    "provision for taxes",
                     "income tax expense (benefit)",
                     "income tax provision",
                     "(Benefit from) provision for income taxes",
@@ -491,6 +513,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                     "earnings before provision for income taxes",
                     "pretax income",
                     "income before provision for income taxes",
+                    "income before provision for taxes",
                     "total",
                     "income from continuing operations before income taxes",
                     "(benefit from) provision for income taxes",
@@ -710,28 +733,61 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
 
 
-                        const totalAssets = strictGet(reportMap, "Total assets");
-                        const totalEquity = strictGet(reportMap, ["Total stockholders’ equity", "Total shareholders’ equity", "Total shareholders' equity", "total shareholders' equity", "total equity", "total shareholders' equity (deficit)", "Total stockholders’ (deficit) equity", "Total stockholders’ equity (deficit)"]);
-                        const totalLiabilities = 
-                          typeof totalAssets === 'number' && typeof totalEquity === 'number'
-                            ? totalAssets - totalEquity
-                            : null;
-                        const preferredEquity = strictGet(reportMap, ["Preferred equity", "Preferred stock", "Preferred stock, $0.001 par value; 2 shares authorized; none issued"]) ?? 0;
-                        const sharesOutstanding = extractSharesOutstanding(reportMap);
-    
-                        // console.log("Equity:", totalEquity);
-                        // console.log("Preferred Equity:", preferredEquity);
-                        // console.log("Shares Outstanding:", sharesOutstanding);
+                        const totalAssets = strictGet(reportMap, ["Total assets", "Assets"]);
 
+                        // Try to read an explicit equity line first
+                        let totalEquity = strictGet(reportMap, [
+                          "Total stockholders’ equity",
+                          "Total shareholders’ equity",
+                          "Total shareholders' equity",
+                          "total shareholders' equity",
+                          "total equity",
+                          "total shareholders' equity (deficit)",
+                          "Total stockholders’ (deficit) equity",
+                          "Total stockholders’ equity (deficit)"
+                        ]);
+
+                        // If there was no explicit equity line, derive it from assets & liabilities
+                        // (we don’t know liabilities yet, so we’ll compute equity after we get liabilities)
+                        const explicitLiabilities = strictGet(reportMap, [
+                          "Total liabilities",
+                          "Total Liabilities",
+                          "Liabilities"
+                        ]);
+
+                        // Fallback: if we don’t have equity but *do* have assets & liabilities, derive equity
+                        if (typeof totalEquity !== "number"
+                          && typeof totalAssets === "number"
+                          && typeof explicitLiabilities === "number"
+                        ) {
+                          totalEquity = totalAssets - explicitLiabilities;
+                        }
+
+                        // Now we can reliably compute liabilities: if we had an explicit liabilities
+                        // line, use that; otherwise derive it from assets & equity
+                        let totalLiabilities;
+                        if (typeof explicitLiabilities === "number") {
+                          totalLiabilities = explicitLiabilities;
+                        } else if (typeof totalAssets === "number" && typeof totalEquity === "number") {
+                          totalLiabilities = totalAssets - totalEquity;
+                        } else {
+                          totalLiabilities = null;
+                        }
+
+                        const preferredEquity = strictGet(reportMap, [
+                          "Preferred equity",
+                          "Preferred stock",
+                          "Preferred stock, $0.001 par value; 2 shares authorized; none issued"
+                        ]) ?? 0;
+
+                        const sharesOutstanding = extractSharesOutstanding(reportMap);
 
                         const bookValuePerShare =
-                          typeof totalEquity === 'number' &&
-                          typeof sharesOutstanding === 'number' &&
-                          sharesOutstanding > 0
+                          typeof totalEquity === "number"
+                          && typeof sharesOutstanding === "number"
+                          && sharesOutstanding > 0
                             ? (totalEquity - preferredEquity) / sharesOutstanding
                             : null;
-
-                        // console.log("Book Value Per Share:", bookValuePerShare);
 
                         const rows = [
                           { label: "Total assets", value: totalAssets },
@@ -739,6 +795,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                           { label: "Total equity", value: totalEquity },
                           { label: "Book value per share", value: bookValuePerShare }
                         ];
+
 
                         return (
 
@@ -951,7 +1008,8 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Net (decrease) increase in cash, cash equivalents, restricted cash and restricted cash equivalents",
                             "Net increase (decrease) in cash and cash equivalents, and restricted cash and cash equivalents",
                             "Net increase/(decrease) in cash & cash equivalents, including restricted",
-                            "Net (decrease)/increase in cash & cash equivalents, including restricted"
+                            "Net (decrease)/increase in cash & cash equivalents, including restricted",
+                            "Net Increase (Decrease)"
 
                           ]);
 
