@@ -497,65 +497,41 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                   const { revenue, netIncome } = extractMetrics(reportMap);
                   const netProfitMargin = revenue ? (netIncome / revenue) * 100 : null;
 
-                  const incomeTax = strictGet(reportMap, [
-                    "income tax expense",
-                    "provision for income taxes",
-                    "provision for taxes",
-                    "income tax expense (benefit)",
-                    "income tax provision",
-                    "(Benefit from) provision for income taxes",
-                    "benefit (provision) for income taxes",
-                    "provision for (benefit from) income taxes",
-                    "income tax provision (benefit)",
-                    "applicable income taxes",
-                    "taxes on income",
-                    "income tax benefit/(expense)",
-                    "income tax (expense)/benefit",
-                    "income tax benefit",
-                    "(Provision for) benefit from income taxes",
-                    "income tax (benefit) provision",
-                    "provision (Benefit) for taxes",
-                    "benefit/(provision) for income taxes"
+                  // Helper to get the numeric value for a tag (or null)
+                  function getTagValue(
+                    map: Record<string, { label?: string; value?: number }>,
+                    tags: string[]
+                  ): number | null {
+                    for (const t of tags) {
+                      const hit = map[t];
+                      if (hit && typeof hit.value === 'number') return hit.value;
+                      // also handle "defref_"-prefixed keys if your maps have them
+                      const defref = map[`defref_${t}`];
+                      if (defref && typeof defref.value === 'number') return defref.value;
+                    }
+                    return null;
+                  }
+
+                  // GAAP first, then IFRS fallback if you want
+                  const incomeTaxVal = getTagValue(reportMap, [
+                    'us-gaap_IncomeTaxExpenseBenefit',
+                    'ifrs-full_IncomeTaxExpenseContinuingOperations',
                   ]);
 
-                  const preTaxIncome = strictGet(reportMap, [
-                    "income before income taxes",
-                    "income before income tax",
-                    "income/(loss) before income tax expense/(benefit)",
-                    "earnings before taxes",
-                    "earnings before provision for income taxes",
-                    "pretax income",
-                    "income before provision for income taxes",
-                    "income before provision for taxes",
-                    "income from continuing operations before income taxes",
-                    "(benefit from) provision for income taxes",
-                    "income before income taxes and equity income",
-                    "total",
-                    "income (loss) before income taxes",
-                    "income (loss) before income tax provision",
-                    "income before taxes on income",
-                    "loss before income taxes",
-                    "income (loss) before income taxes and income (loss) from equity method investments",
-                    "income (loss) before income taxes and income from equity method investments",
-                    "income (loss) before income taxes and loss from equity method investments",
-                    "loss before income taxes and loss from equity method investments",
-                    "loss before income taxes and income (loss) from equity method investments",
-                    "income (loss) from continuing operations before income taxes",
-                    "net income (loss) before income taxes",
-                    "net loss before income taxes",
-                    "loss before income tax provision",
-                    "income before provision (Benefit) for taxes",
-                    "income of consolidated group before income taxes",
-                    
+                  const preTaxIncomeVal = getTagValue(reportMap, [
+                    'us-gaap_IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
+                    'ifrs-full_ProfitLossBeforeTax',
                   ]);
-                  console.log("Income tax:", incomeTax)
-                  console.log("Pre Tax Income:", preTaxIncome)
+
                   const effectiveTaxRate =
-                    typeof incomeTax === 'number' &&
-                    typeof preTaxIncome === 'number' &&
-                    preTaxIncome !== 0
-                      ? Math.abs((incomeTax / preTaxIncome) * 100)
+                    typeof incomeTaxVal === 'number' &&
+                    typeof preTaxIncomeVal === 'number' &&
+                    preTaxIncomeVal !== 0
+                      ? (incomeTaxVal / preTaxIncomeVal) * 100 // remove Math.abs if you want negative when it's a benefit
                       : null;
+
+                  console.log({ incomeTaxVal, preTaxIncomeVal, effectiveTaxRate });
+
 
                   let operatingExpense = strictGet(reportMap, [
                     "operating expense",
@@ -596,7 +572,8 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                       "selling, general and administrative expenses, including $31, $33, and $33, respectively, to related parties", // Carvana Specific
                       "selling, general and administrative expenses, including $33, $33, and $27, respectively, to related parties",
                       "selling, general and administrative expenses, including $33, $27, and $19, respectively, to related parties",
-                      "selling, administrative, and other expenses"
+                      "selling, administrative, and other expenses",
+                      "automotive and other selling, general and administrative expense"
                     ];
 
                     let sgna = 0;
@@ -650,7 +627,9 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                       "Net loss per share attributable to Snowflake Inc. Class A and Class B common stockholders—basic (in dollars per share)",
                       "Earnings (loss) per share - basic (in dollars per share)",
                       "Continuing operations (in dollars per share)",
-                      "Continuing operations - basic (in dollars per share)"
+                      "Continuing operations - basic (in dollars per share)",
+                      "Basic income (in dollars per share)",
+                      "Basic earnings per common share (in dollars per share)"
                     ]) },
                     { label: "Effective tax rate", value: effectiveTaxRate },
                   ];
@@ -984,7 +963,7 @@ const [selectedYear, setSelectedYear] = useState<number | null>(null);
                             "Net cash used by operating activities",
                             "Net cash provided/(used) by operating activities",
                             "Net cash (used)/provided by operating activities",
-                            "Change in cash from operating activities"
+                            "Change in cash from operating activities",
                           ]);
                         const netInvesting = strictGet(
                           reportMap, [
