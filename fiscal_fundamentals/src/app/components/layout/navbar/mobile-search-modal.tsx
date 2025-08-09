@@ -49,7 +49,7 @@ export default function MobileSearchModal({
       </div>
       {filtered.length > 0 && (
         <ul className="mt-4 w-full rounded-md bg-white shadow-md dark:bg-neutral-900">
-          {filtered.map(({ ticker, companyName }) => (
+          {filtered.slice(0, 8).map(({ ticker, companyName }) => (
             <li
               key={ticker}
               className="cursor-pointer px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"

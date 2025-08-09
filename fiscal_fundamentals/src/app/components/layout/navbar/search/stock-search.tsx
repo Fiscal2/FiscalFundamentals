@@ -62,7 +62,7 @@ export default function StockSearch({
   }
 
   function formatCompanyName(name: string): string {
-  return name.replace(/[^A-Z0-9 ]/gi, '').toUpperCase().trim();
+  return name.replace(/[^A-Z0-9 .]/gi, '').toUpperCase().trim();
 }
 
  return (
@@ -108,13 +108,16 @@ export default function StockSearch({
         {/* Dropdown for desktop */}
         {filtered.length > 0 && (
             <ul className="absolute z-10 mt-1 w-full rounded-md bg-white shadow-md dark:bg-neutral-900">
-            {filtered.map(({ ticker, companyName }) => (
+            {filtered.slice(0, 5).map(({ ticker, companyName }) => (
                 <li
                 key={ticker}
                 className="cursor-pointer px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 onClick={() => handleSelect(ticker)}
                 >
-                <span className="font-semibold">{ticker}</span> — {formatCompanyName(companyName)}
+                <div className="flex flex-col">
+                    <span className="font-medium">{formatCompanyName(companyName)}</span>
+                    <span className="text-sm text-gray-400">{ticker}</span>
+                </div>
                 </li>
             ))}
             </ul>
