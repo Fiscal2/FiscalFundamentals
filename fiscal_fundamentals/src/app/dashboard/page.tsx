@@ -33,6 +33,12 @@ type ReportItem = {
   value: number;
 };
 
+interface IncomeReport {
+    date: string;
+    months: number;
+    map: Record<string, ReportItem>;
+}
+
 const extractMetrics = (rawMap: Record<string, { label?: string; value?: number }>) => {
   let revenue = 0;
   let netIncome = 0;
@@ -155,12 +161,6 @@ export default function Dashboard() {
 
 
 
-  interface IncomeReport {
-    date: string;
-    months: number;
-    map: Record<string, ReportItem>;
-  }
-
   const chartData = data
     .filter(row => row.ticker === selected && row.quarter === 0)
     .map(row => {
@@ -265,6 +265,8 @@ export default function Dashboard() {
       const netCashChange = getTagValue(
         reportMap, [
         'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect',
+        'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseExcludingExchangeRateEffect',
+        'us-gaap_CashAndCashEquivalentsPeriodIncreaseDecrease',
         'ifrs-full_IncreaseDecreaseInCashAndCashEquivalentsBeforeEffectOfExchangeRateChanges',
         'ifrs-full_IncreaseDecreaseInCashAndCashEquivalents'
       ]);
@@ -493,6 +495,12 @@ export default function Dashboard() {
                           "general and administrative",
                           "research and development expenses",
                           "selling, administrative and general expenses",
+                          "selling, general and administrative expenses",
+                          "depreciation and depletion (includes impairments)",
+                          "exploration expenses, including dry holes",
+                          "non-service pension and postretirement benefit expense",
+                          "amortization of intangible assets",
+                          "acquisition-related expenses",
                           "sales and marketing",
                           "marketing",
                           "technology and development",
@@ -831,6 +839,14 @@ export default function Dashboard() {
 
                       const reportMap = matchedReport?.map ?? {};
 
+                      const incomeParsed: IncomeReport[] = JSON.parse(selectedRow.income_statement);
+                      const incomeMatch = incomeParsed.find((r: IncomeReport) => {
+                        const parts = r.date?.split('-');
+                        return parts && parseInt(parts[2]) === selectedYear;
+                      });
+                      const incomeMap: Record<string, ReportItem> = incomeMatch?.map ?? {};
+                      const { netIncome } = extractMetrics(incomeMap);
+
                       const netOperating = getTagValue(
                         reportMap, [
                         'us-gaap_NetCashProvidedByUsedInOperatingActivities',
@@ -852,16 +868,36 @@ export default function Dashboard() {
                       const netCashChange = getTagValue(
                         reportMap, [
                         'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect',
+                        'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseExcludingExchangeRateEffect',
+                        'us-gaap_CashAndCashEquivalentsPeriodIncreaseDecrease',
                         'ifrs-full_IncreaseDecreaseInCashAndCashEquivalentsBeforeEffectOfExchangeRateChanges',
                         'ifrs-full_IncreaseDecreaseInCashAndCashEquivalents'
 
                       ]);
 
+                      // CapEx (normalize to a positive outflow magnitude)
+                      const netCapex = getTagValue(reportMap, [
+                        'us-gaap_PaymentsToAcquirePropertyPlantAndEquipment',
+                        'us-gaap_PaymentsToAcquireProductiveAssets',
+                        'ifrs-full_PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities',
+                        'ifrs-full_AcquisitionOfPropertyPlantAndEquipment'
+                      ]);
+                      const capexOutflow = (typeof netCapex === 'number')
+                        ? Math.abs(netCapex)    // statements may show capex as negative; use magnitude
+                        : null;
+
+                      // Free Cash Flow = CFO - CapEx
+                      const freeCashFlow = (typeof netOperating === 'number' && typeof capexOutflow === 'number')
+                        ? netOperating - capexOutflow
+                        : null;
+
                       const rows = [
+                        { label: "Net Income", value: netIncome  },
                         { label: "Operating Cash Flow", value: netOperating },
                         { label: "Investing Cash Flow", value: netInvesting },
                         { label: "Financing Cash Flow", value: netFinancing },
                         { label: "Net Change in Cash", value: netCashChange },
+                        { label: "Free Cash Flow", value: freeCashFlow }
                       ];
 
                       return (
