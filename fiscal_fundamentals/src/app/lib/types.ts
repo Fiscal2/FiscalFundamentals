@@ -15,6 +15,7 @@ export type Card = {
 export type StockItem = {
   ticker: string;
   companyName: string;
+  listedExchange?: string[] | null;
 };
 
 export type MenuItem = {

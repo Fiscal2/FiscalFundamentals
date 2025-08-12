@@ -23,7 +23,7 @@ export default function StockSearch({
 
   const fuse = useMemo(() => {
     return new Fuse(allTickers, {
-        keys: ['ticker', 'companyName'],
+        keys: ['ticker', 'companyName', 'listedExchange'],
         threshold: 0.4, // adjust as needed
         ignoreLocation: true
     });
@@ -108,7 +108,7 @@ export default function StockSearch({
         {/* Dropdown for desktop */}
         {filtered.length > 0 && (
             <ul className="absolute z-10 mt-1 w-full rounded-md bg-white shadow-md dark:bg-neutral-900">
-            {filtered.slice(0, 5).map(({ ticker, companyName }) => (
+            {filtered.slice(0, 5).map(({ ticker, companyName, listedExchange },) => (
                 <li
                 key={ticker}
                 className="cursor-pointer px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
@@ -116,7 +116,7 @@ export default function StockSearch({
                 >
                 <div className="flex flex-col">
                     <span className="font-medium">{formatCompanyName(companyName)}</span>
-                    <span className="text-sm text-gray-400">{ticker}</span>
+                    <span className="text-sm text-gray-400">{ticker} - {listedExchange}</span>
                 </div>
                 </li>
             ))}

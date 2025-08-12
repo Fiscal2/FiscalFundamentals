@@ -28,23 +28,35 @@ export function Navbar() {
         const json = (await res.json()) as {
             ticker: string;
             company_name?: string;
+            listed_exchange: string;
             quarter: number;
         }[];
 
 
         const unique: StockItem[] = Array.from(
-            new Map(
-                json
-                .filter(row => row.quarter === 0)
-                .map(row => [
-                    row.ticker,
-                    {
+        new Map(
+            json
+            .filter(row => row.quarter === 0)
+            .map(row => {
+                let ex = row.listed_exchange;
+
+                // if JSONB came back as a string, parse it
+                if (typeof ex === 'string') {
+                try { ex = JSON.parse(ex); } catch {}
+                }
+
+                return [
+                row.ticker,
+                {
                     ticker: row.ticker,
                     companyName: row.company_name?.trim() || 'Unknown',
-                    },
-                ])
-            ).values()
+                    listedExchange: Array.isArray(ex) ? ex : (ex ? [String(ex)] : null),
+                } as StockItem
+                ];
+            })
+        ).values()
         );
+
 
 
         setTickers(unique);

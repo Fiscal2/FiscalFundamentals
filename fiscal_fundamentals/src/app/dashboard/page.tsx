@@ -47,6 +47,7 @@ const extractMetrics = (rawMap: Record<string, { label?: string; value?: number 
     'axp_TotalRevenuesNetOfInterestExpenseAfterProvisionsForLosses',
     'us-gaap_Revenues',
     'us-gaap_RevenuesNetOfInterestExpense',
+    'us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax',
     'us-gaap_SalesRevenueNet',
     'us-gaap_SalesRevenueServicesNet',
   ];
@@ -157,8 +158,6 @@ export default function Dashboard() {
       setSelected(ticker);
     }
   }, [searchParams, selected]);
-
-
 
 
   const chartData = data
@@ -423,25 +422,6 @@ export default function Dashboard() {
                       const parsed: IncomeReport[] = JSON.parse(selectedRow.income_statement);
                       const reportMap = parsed[0]?.map ?? {};
 
-                      const strictGet = (map: Record<string, ReportItem>, labels: string | string[]): number | null => {
-                        const normalize = (str: string) =>
-                          str.toLowerCase()
-                            .replace(/[’‘]/g, "'") // normalize curly quotes to straight
-                            .replace(/\s+/g, ' ')  // normalize whitespace
-                            .trim();
-
-                        const targets = (Array.isArray(labels) ? labels : [labels]).map(normalize);
-
-                        for (const key in map) {
-                          const label = map[key]?.label;
-                          if (!label) continue;
-                          const normalized = normalize(label);
-                          if (targets.includes(normalized)) return map[key].value;
-                        }
-
-                        return null;
-                      };
-
 
                       const { revenue, netIncome } = extractMetrics(reportMap);
                       const netProfitMargin = revenue ? (netIncome / revenue) * 100 : null;
@@ -464,71 +444,53 @@ export default function Dashboard() {
                         typeof incomeTaxVal === 'number' &&
                           typeof preTaxIncomeVal === 'number' &&
                           preTaxIncomeVal !== 0
-                          ? (incomeTaxVal / preTaxIncomeVal) * 100 // remove Math.abs if you want negative when it's a benefit
+                          ? (incomeTaxVal / preTaxIncomeVal) * 100 
                           : null;
 
                       console.log({ incomeTaxVal, preTaxIncomeVal, effectiveTaxRate });
 
 
-                      let operatingExpense = strictGet(reportMap, [
-                        "operating expense",
-                        "operating expenses",
-                        "total operating expenses",
-                        "costs and expenses",
-                        "operating costs",
-                        "operating income and expense",
-                        "operating expense (excluding depreciation)",
-                        "operating, selling, general and administrative expenses",
-                        "total expenses",
-                        "total noninterest expense",
-                        "total expenses excluding interest",
-                        "total operating costs and expenses",
-                        "selling, general and administrative expenses, including $27, $19, and $14, respectively, to related parties",
+                      // 1) Prefer a direct total if the filer provides one
+                      let operatingExpense = getTagValue(reportMap, [
+                        'us-gaap_OperatingExpenses',      // generic total (not always present)
+                        'us-gaap_NoninterestExpense'      // banks/financials use this as "operating expense"
                       ]);
 
+                      // 2) Otherwise, build it from standard operating components
                       if (operatingExpense === null) {
+                        // Core operating expense building blocks (SG&A + R&D)
+                        const componentTags = [
+                          // SG&A family
+                          'us-gaap_SellingGeneralAndAdministrativeExpense',
+                          'us-gaap_SellingAndMarketingExpense',          // sometimes split
+                          'us-gaap_GeneralAndAdministrativeExpense',
+                          'us-gaap_MarketingAndAdvertisingExpense',
 
-                        const expenseLabels = [
-                          "selling, general and administrative",
-                          "sg&a",
-                          "administrative expenses",
-                          "general and administrative",
-                          "research and development expenses",
-                          "selling, administrative and general expenses",
-                          "selling, general and administrative expenses",
-                          "depreciation and depletion (includes impairments)",
-                          "exploration expenses, including dry holes",
-                          "non-service pension and postretirement benefit expense",
-                          "amortization of intangible assets",
-                          "acquisition-related expenses",
-                          "sales and marketing",
-                          "marketing",
-                          "technology and development",
-                          "marketing, general and administrative",
-                          "research and development",
-                          "licensing gain",
-                          "amortization of acquisition-related intangibles",
-                          "amortization of acquisition-related intangibles_opex",
-                          "other operating expense, net",
-                          "other operating expenses",
-                          "other (income) expense, net",
-                          "other expense (income), net",
-                          "selling, general and administrative expenses, including $31, $33, and $33, respectively, to related parties", // Carvana Specific
-                          "selling, general and administrative expenses, including $33, $33, and $27, respectively, to related parties",
-                          "selling, general and administrative expenses, including $33, $27, and $19, respectively, to related parties",
-                          "selling, administrative, and other expenses",
-                          "automotive and other selling, general and administrative expense"
+                          // R&D
+                          'us-gaap_ResearchAndDevelopmentExpense',
+                          'us-gaap_ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost',
+                          'us-gaap_ResearchAndDevelopmentInProcess',     // IPR&D charged to expense
+
+                          // Common add-ons often included in operating expense
+                          'us-gaap_AmortizationOfIntangibleAssets',
+                          'us-gaap_RestructuringCharges',
+
+                          // If the statement uses an operating "other" line:
+                          'us-gaap_OtherOperatingIncomeExpenseNet'       // NOTE: exclude Nonoperating version
                         ];
 
-                        let sgna = 0;
+                        let sum = 0;
+                        let foundAny = false;
 
-                        for (const label of expenseLabels) {
-                          const val = strictGet(reportMap, [label]);
-                          if (typeof val === "number") sgna += val;
+                        for (const tag of componentTags) {
+                          const v = getTagValue(reportMap, [tag]);
+                          if (typeof v === 'number') {
+                            sum += v;
+                            foundAny = true;
+                          }
                         }
 
-                        operatingExpense = sgna > 0 ? sgna : null;
-
+                        operatingExpense = foundAny ? sum : null;
                       }
 
 
@@ -540,6 +502,7 @@ export default function Dashboard() {
                         {
                           label: "Earnings per share", value: getTagValue(reportMap, [
                             'us-gaap_EarningsPerShareBasic',
+                            'us-gaap_IncomeLossFromContinuingOperationsPerBasicShare',
                             'us-gaap_EarningsPerShareBasicAndDiluted',
                             'ifrs-full_BasicEarningsLossPerShare'
                           ])
@@ -671,6 +634,19 @@ export default function Dashboard() {
 
                       const totalAssets = strictGet(reportMap, ["Total assets", "Assets"]);
 
+                      const cash = getTagValue(reportMap, [
+                        'us-gaap_CashAndCashEquivalentsAtCarryingValue',
+                        'us-gaap_CashAndCashEquivalents',
+                        'us-gaap_Cash' // rare, but cheap fallback
+                      ]) ?? 0;
+
+                      const shortTermInv = getTagValue(reportMap, [
+                        'us-gaap_ShortTermInvestments',
+                        'us-gaap_MarketableSecuritiesCurrent'
+                      ]) ?? 0;
+
+                      const cashAndSTI = (typeof cash === 'number' ? cash : 0) + (typeof shortTermInv === 'number' ? shortTermInv : 0);
+
                       // Try to read an explicit equity line first
                       let totalEquity = strictGet(reportMap, [
                         "Total stockholders’ equity",
@@ -727,6 +703,7 @@ export default function Dashboard() {
                         { label: "Total assets", value: totalAssets },
                         { label: "Total liabilities", value: totalLiabilities },
                         { label: "Total equity", value: totalEquity },
+                        { label: "Cash and short term investments", value: cashAndSTI },
                         { label: "Book value per share", value: bookValuePerShare }
                       ];
 
@@ -879,6 +856,7 @@ export default function Dashboard() {
                       const netCapex = getTagValue(reportMap, [
                         'us-gaap_PaymentsToAcquirePropertyPlantAndEquipment',
                         'us-gaap_PaymentsToAcquireProductiveAssets',
+                        'us-gaap_PaymentsToAcquireOtherProductiveAssets',
                         'ifrs-full_PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities',
                         'ifrs-full_AcquisitionOfPropertyPlantAndEquipment'
                       ]);
