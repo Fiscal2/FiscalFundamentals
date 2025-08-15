@@ -62,7 +62,7 @@ export default function StockSearch({
   }
 
   function formatCompanyName(name: string): string {
-  return name.replace(/[^A-Z0-9 .]/gi, '').toUpperCase().trim();
+  return name.replace(/[^A-Z0-9 .&]/gi, '').toUpperCase().trim();
 }
 
  return (

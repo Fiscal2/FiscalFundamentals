@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BarChart, Bar, XAxis, XAxisProps, YAxis, Legend, ResponsiveContainer, LabelList, LabelProps } from 'recharts';
+import { BarChart, Bar, XAxis, XAxisProps, YAxis, Legend, ResponsiveContainer, LabelList, LabelProps, ReferenceLine } from 'recharts';
 import { useSearchParams } from 'next/navigation';
 import { getTagValue } from '@/app/lib/xbrl';
 
@@ -10,6 +10,7 @@ import { getTagValue } from '@/app/lib/xbrl';
 interface FinancialRow {
   ticker: string;
   company_name?: string;
+  listed_exchange?: string;
   year: number;
   quarter: number;
   income_statement: string;
@@ -34,9 +35,9 @@ type ReportItem = {
 };
 
 interface IncomeReport {
-    date: string;
-    months: number;
-    map: Record<string, ReportItem>;
+  date: string;
+  months: number;
+  map: Record<string, ReportItem>;
 }
 
 const extractMetrics = (rawMap: Record<string, { label?: string; value?: number }>) => {
@@ -45,8 +46,8 @@ const extractMetrics = (rawMap: Record<string, { label?: string; value?: number 
 
   const revenueKeys = [
     'axp_TotalRevenuesNetOfInterestExpenseAfterProvisionsForLosses',
-    'us-gaap_Revenues',
     'us-gaap_RevenuesNetOfInterestExpense',
+    'us-gaap_Revenues',
     'us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax',
     'us-gaap_SalesRevenueNet',
     'us-gaap_SalesRevenueServicesNet',
@@ -126,7 +127,7 @@ export default function Dashboard() {
       try {
         const res = await fetch('http://localhost:8000/api/financials'); // use the actual API route
         const json = await res.json();
-        console.log('Fetched data:', json);
+        //console.log('Fetched data:', json);
 
         if (Array.isArray(json)) {
           setData(json);
@@ -213,31 +214,45 @@ export default function Dashboard() {
         return null;
       };
 
-
-      const totalAssets = strictGet(reportMap, ["Total assets", "Assets"]);
-      let totalEquity = strictGet(reportMap, ["Total stockholders’ equity", "Total shareholders’ equity", "Total shareholders' equity", "total shareholders' equity", "total equity", "total shareholders' equity (deficit)", "Total stockholders’ (deficit) equity", "Total stockholders’ equity (deficit)"]);
-      const explicitLiabilities = strictGet(reportMap, [
-        'Total liabilities',
-        'Total Liabilities',
-        'Liabilities'
+      const totalAssets = strictGet(reportMap, ["Total assets", "Total Assets", "Assets"]);
+      // Try to read an explicit equity line first
+      let totalEquity = strictGet(reportMap, [
+        "Total stockholders’ equity",
+        "Total shareholders’ equity",
+        "Total shareholders' equity",
+        "total shareholders' equity",
+        "total equity",
+        "total shareholders' equity (deficit)",
+        "Total stockholders’ (deficit) equity",
+        "Total stockholders’ equity (deficit)"
       ]);
-      // derive equity if missing and we have assets + explicit liabilities
-      if (
-        typeof totalEquity !== 'number' &&
-        typeof totalAssets === 'number' &&
-        typeof explicitLiabilities === 'number'
+
+      // If there was no explicit equity line, derive it from assets & liabilities
+      // (we don’t know liabilities yet, so we’ll compute equity after we get liabilities)
+      const explicitLiabilities = strictGet(reportMap, [
+        "Total liabilities",
+        "Total Liabilities",
+        "Liabilities",
+        "TOTAL LIABILITIES"
+      ]);
+
+      // Fallback: if we don’t have equity but *do* have assets & liabilities, derive equity
+      if (typeof totalEquity !== "number"
+        && typeof totalAssets === "number"
+        && typeof explicitLiabilities === "number"
       ) {
         totalEquity = totalAssets - explicitLiabilities;
       }
 
-      let totalLiabilities: number | null = null;
-      if (typeof explicitLiabilities === 'number') {
+      // Now we can reliably compute liabilities: if we had an explicit liabilities
+      // line, use that; otherwise derive it from assets & equity
+      let totalLiabilities;
+      if (typeof explicitLiabilities === "number") {
         totalLiabilities = explicitLiabilities;
-      } else if (
-        typeof totalAssets === 'number' &&
-        typeof totalEquity === 'number'
-      ) {
+      } else if (typeof totalAssets === "number" && typeof totalEquity === "number") {
         totalLiabilities = totalAssets - totalEquity;
+      } else {
+        totalLiabilities = null;
       }
 
       return {
@@ -348,10 +363,31 @@ export default function Dashboard() {
 
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
+  const toTitleCase = (str: string) => {
+    const exceptions = ["PG&E", "HP", "PLC"]; // add more as needed
+
+    return str
+      .toLowerCase()
+      .split(" ")
+      .map(word => {
+        const upperWord = word.toUpperCase();
+        if (exceptions.includes(upperWord)) {
+          return upperWord;
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(" ");
+  };
+
+  const rawCompanyName = data.find(d => d.ticker === selected)?.company_name || '';
+  const rawListedExchange = data.find(d => d.ticker === selected)?.listed_exchange || '';
+  const companyName = toTitleCase(rawCompanyName);
+  const listedExchange = toTitleCase(rawListedExchange)
 
   return (
     <main className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Financial Dashboard</h1>
+      <h1>{listedExchange.toUpperCase()}</h1>
+      <h1 className="text-2xl font-bold mb-4">{companyName}</h1>
 
       {selected && (
         <div className="mt-8">
@@ -372,6 +408,7 @@ export default function Dashboard() {
               >
                 <XAxis
                   dataKey="year"
+                  axisLine={false}
                   tick={(props) => (
                     <CustomXAxisTick
                       {...props}
@@ -383,7 +420,8 @@ export default function Dashboard() {
                     />
                   )}
                 />
-                <YAxis tick={false} axisLine={false} domain={[0, 'dataMax']} />
+                <YAxis tick={false} axisLine={false} domain={[(dataMin: number) => Math.min(0, dataMin) * 1.1, (dataMax: number) => dataMax * 1.1]} />
+                <ReferenceLine y={0} stroke="#9CA3AF" />
                 <Legend
                   content={() => (
                     <div className="flex justify-center gap-6 mt-4 text-sm">
@@ -410,7 +448,7 @@ export default function Dashboard() {
               <div className="mt-8 w-[95%] mx-auto">
                 <details className="rounded-md p-4">
                   <summary className="cursor-pointer text-lg font-semibold mb-2">
-                    Income Statement for {selected} – {selectedYear}
+                    Income Statement – {selectedYear}
                   </summary>
                   <div className="mt-4">
                     {(() => {
@@ -437,6 +475,7 @@ export default function Dashboard() {
                         'us-gaap_IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
                         'us-gaap_IncomeLossIncludingPortionAttributableToNoncontrollingInterest',
                         'mcd_IncomeLossFromContinuingOperationsBeforeIncomeTaxes',
+                        'pg_IncomeLossFromContinuingOperationsBeforeIncomeTaxes',
                         'ifrs-full_ProfitLossBeforeTax',
                       ]);
 
@@ -444,16 +483,15 @@ export default function Dashboard() {
                         typeof incomeTaxVal === 'number' &&
                           typeof preTaxIncomeVal === 'number' &&
                           preTaxIncomeVal !== 0
-                          ? (incomeTaxVal / preTaxIncomeVal) * 100 
+                          ? (incomeTaxVal / preTaxIncomeVal) * 100
                           : null;
-
-                      console.log({ incomeTaxVal, preTaxIncomeVal, effectiveTaxRate });
-
 
                       // 1) Prefer a direct total if the filer provides one
                       let operatingExpense = getTagValue(reportMap, [
                         'us-gaap_OperatingExpenses',      // generic total (not always present)
-                        'us-gaap_NoninterestExpense'      // banks/financials use this as "operating expense"
+                        'us-gaap_NoninterestExpense',      // banks/financials use this as "operating expense"
+                        'us-gaap_CostsAndExpenses',
+                        'us-gaap_OperatingCostsAndExpenses'
                       ]);
 
                       // 2) Otherwise, build it from standard operating components
@@ -474,9 +512,12 @@ export default function Dashboard() {
                           // Common add-ons often included in operating expense
                           'us-gaap_AmortizationOfIntangibleAssets',
                           'us-gaap_RestructuringCharges',
+                          'us-gaap_DepreciationDepletionAndAmortization',
+                          'ibm_IntellectualPropertyAndCustomDevelopmentIncome',
 
                           // If the statement uses an operating "other" line:
-                          'us-gaap_OtherOperatingIncomeExpenseNet'       // NOTE: exclude Nonoperating version
+                          'us-gaap_OtherOperatingIncomeExpenseNet',       // NOTE: exclude Nonoperating version
+
                         ];
 
                         let sum = 0;
@@ -514,7 +555,7 @@ export default function Dashboard() {
                         <table className="w-full mt-4 text-sm border-t">
                           <thead>
                             <tr className="text-left text-gray-400 border-b">
-                              <th className="py-2">Metric</th>
+                              <th className="py-2">(USD)</th>
                               <th className="py-2">Value</th>
                             </tr>
                           </thead>
@@ -547,7 +588,7 @@ export default function Dashboard() {
               <div className="w-[95%] mx-auto">
                 <details className="rounded-md p-4">
                   <summary className="cursor-pointer text-lg font-semibold mb-2">
-                    Balance Sheet for {selected} – {selectedYear}
+                    Balance Sheet – {selectedYear}
                   </summary>
                   <div className="mt-4">
                     {(() => {
@@ -637,6 +678,7 @@ export default function Dashboard() {
                       const cash = getTagValue(reportMap, [
                         'us-gaap_CashAndCashEquivalentsAtCarryingValue',
                         'us-gaap_CashAndCashEquivalents',
+                        'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
                         'us-gaap_Cash' // rare, but cheap fallback
                       ]) ?? 0;
 
@@ -766,7 +808,7 @@ export default function Dashboard() {
                             <table className="w-full mt-4 text-sm border-t">
                               <thead>
                                 <tr className="text-left text-gray-400 border-b">
-                                  <th className="py-2">Metric</th>
+                                  <th className="py-2">(USD)</th>
                                   <th className="py-2">Value</th>
                                 </tr>
                               </thead>
@@ -797,7 +839,7 @@ export default function Dashboard() {
               <div className="w-[95%] mx-auto">
                 <details className="rounded-md p-4">
                   <summary className="cursor-pointer text-lg font-semibold mb-2">
-                    Cash Flow for {selected} – {selectedYear}
+                    Cash Flow – {selectedYear}
                   </summary>
                   <div className="mt-4">
                     {(() => {
@@ -827,18 +869,21 @@ export default function Dashboard() {
                       const netOperating = getTagValue(
                         reportMap, [
                         'us-gaap_NetCashProvidedByUsedInOperatingActivities',
+                        'us-gaap_NetCashProvidedByUsedInOperatingActivitiesContinuingOperations',
                         'ifrs-full_CashFlowsFromUsedInOperatingActivities'
 
                       ]);
                       const netInvesting = getTagValue(
                         reportMap, [
                         'us-gaap_NetCashProvidedByUsedInInvestingActivities',
+                        'us-gaap_NetCashProvidedByUsedInInvestingActivitiesContinuingOperations',
                         'ifrs-full_CashFlowsFromUsedInInvestingActivities'
 
                       ]);
                       const netFinancing = getTagValue(
                         reportMap, [
                         'us-gaap_NetCashProvidedByUsedInFinancingActivities',
+                        'us-gaap_NetCashProvidedByUsedInFinancingActivitiesContinuingOperations',
                         'ifrs-full_CashFlowsFromUsedInFinancingActivities'
 
                       ]);
@@ -852,25 +897,61 @@ export default function Dashboard() {
 
                       ]);
 
-                      // CapEx (normalize to a positive outflow magnitude)
-                      const netCapex = getTagValue(reportMap, [
+                      // helper: sum any numeric tags found; returns null if none found
+                      const sumTags = (map: Record<string, ReportItem>, tags: string[]): number | null => {
+                        let found = false;
+                        let sum = 0;
+                        for (const t of tags) {
+                          const v = getTagValue(map, [t]);
+                          if (typeof v === 'number') {
+                            sum += v;
+                            found = true;
+                          }
+                        }
+                        return found ? sum : null;
+                      };
+
+                      // CapEx outflow tags (additive)
+                      const capexOutflowTags = [
+                        // classic PP&E
                         'us-gaap_PaymentsToAcquirePropertyPlantAndEquipment',
                         'us-gaap_PaymentsToAcquireProductiveAssets',
                         'us-gaap_PaymentsToAcquireOtherProductiveAssets',
                         'ifrs-full_PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities',
-                        'ifrs-full_AcquisitionOfPropertyPlantAndEquipment'
-                      ]);
-                      const capexOutflow = (typeof netCapex === 'number')
-                        ? Math.abs(netCapex)    // statements may show capex as negative; use magnitude
+                        'ifrs-full_AcquisitionOfPropertyPlantAndEquipment',
+
+                        // REIT / real-estate style
+                        'us-gaap_PaymentsForCapitalImprovements',
+                        'us-gaap_PaymentsToAcquireCommercialRealEstate',
+                        'us-gaap_PaymentsToAcquireRealEstate',
+                      ];
+
+                      // CapEx proceeds tags (to subtract)
+                      const capexProceedsTags = [
+                        'us-gaap_ProceedsFromSaleOfPropertyPlantAndEquipment',
+                        'us-gaap_ProceedsFromSaleOfProductiveAssets',
+                        'us-gaap_ProceedsFromSaleOfPropertyHeldForSale', // common in REITs
+                        'ifrs-full_ProceedsFromSalesOfPropertyPlantAndEquipment',
+                      ];
+
+                      // signed sums (cash flow sign convention: outflows typically negative)
+                      const capexOutflowsSigned = sumTags(reportMap, capexOutflowTags) ?? 0;   // likely negative
+                      const capexProceedsSigned = sumTags(reportMap, capexProceedsTags) ?? 0;   // likely positive
+
+                      // net CapEx (signed): outflows + proceeds; magnitude used for FCF subtraction
+                      const netCapexSigned = capexOutflowsSigned + capexProceedsSigned;
+                      const capexOutflow = (capexOutflowsSigned !== 0 || capexProceedsSigned !== 0)
+                        ? Math.abs(netCapexSigned)
                         : null;
 
-                      // Free Cash Flow = CFO - CapEx
+                      // Free Cash Flow = CFO - CapEx (magnitude)
                       const freeCashFlow = (typeof netOperating === 'number' && typeof capexOutflow === 'number')
                         ? netOperating - capexOutflow
                         : null;
 
+
                       const rows = [
-                        { label: "Net Income", value: netIncome  },
+                        { label: "Net Income", value: netIncome },
                         { label: "Operating Cash Flow", value: netOperating },
                         { label: "Investing Cash Flow", value: netInvesting },
                         { label: "Financing Cash Flow", value: netFinancing },
@@ -897,6 +978,7 @@ export default function Dashboard() {
                               >
                                 <XAxis
                                   dataKey="year"
+                                  axisLine={false}
                                   tick={(props) => (
                                     <CustomXAxisTick
                                       {...props}
@@ -908,7 +990,8 @@ export default function Dashboard() {
                                     />
                                   )}
                                 />
-                                <YAxis tick={false} axisLine={false} domain={['dataMin', 'dataMax']} />
+                                <YAxis tick={false} axisLine={false} domain={[(dataMin: number) => Math.min(0, dataMin) * 1.1, (dataMax: number) => dataMax * 1.1]} />
+                                <ReferenceLine y={0} stroke="#9CA3AF" />
                                 <Legend
                                   content={() => (
                                     <div className="flex justify-center gap-6 mt-4 text-sm">
@@ -928,7 +1011,7 @@ export default function Dashboard() {
                             <table className="w-full mt-4 text-sm border-t">
                               <thead>
                                 <tr className="text-left text-gray-400 border-b">
-                                  <th className="py-2">Metric</th>
+                                  <th className="py-2">(USD)</th>
                                   <th className="py-2">Value</th>
                                 </tr>
                               </thead>
