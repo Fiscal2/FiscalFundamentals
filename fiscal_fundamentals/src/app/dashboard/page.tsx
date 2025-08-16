@@ -195,48 +195,22 @@ export default function Dashboard() {
 
       const reportMap: Record<string, ReportItem> = matchedReport?.map ?? {};
 
-      const strictGet = (map: Record<string, ReportItem>, labels: string | string[]): number | null => {
-        const normalize = (str: string) =>
-          str.toLowerCase()
-            .replace(/[’‘]/g, "'") // normalize curly quotes to straight
-            .replace(/\s+/g, ' ')  // normalize whitespace
-            .trim();
-
-        const targets = (Array.isArray(labels) ? labels : [labels]).map(normalize);
-
-        for (const key in map) {
-          const label = map[key]?.label;
-          if (!label) continue;
-          const normalized = normalize(label);
-          if (targets.includes(normalized)) return map[key].value;
-        }
-
-        return null;
-      };
-
-      const totalAssets = strictGet(reportMap, ["Total assets", "Total Assets", "Assets"]);
+      const totalAssets = getTagValue(reportMap, [
+        'us-gaap_Assets'
+      ]);
       // Try to read an explicit equity line first
-      let totalEquity = strictGet(reportMap, [
-        "Total stockholders’ equity",
-        "Total shareholders’ equity",
-        "Total shareholders' equity",
-        "total shareholders' equity",
-        "total equity",
-        "total shareholders' equity (deficit)",
-        "Total stockholders’ (deficit) equity",
-        "Total stockholders’ equity (deficit)"
+      let totalEquity = getTagValue(reportMap, [
+        "us-gaap_StockholdersEquity",
+        "us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
       ]);
 
       // If there was no explicit equity line, derive it from assets & liabilities
       // (we don’t know liabilities yet, so we’ll compute equity after we get liabilities)
-      const explicitLiabilities = strictGet(reportMap, [
-        "Total liabilities",
-        "Total Liabilities",
-        "Liabilities",
-        "TOTAL LIABILITIES"
+      const explicitLiabilities = getTagValue(reportMap, [
+        'us-gaap_Liabilities'
       ]);
 
-      // Fallback: if we don’t have equity but *do* have assets & liabilities, derive equity
+      // Fallback: if we don’t have equity but do have assets & liabilities, derive equity
       if (typeof totalEquity !== "number"
         && typeof totalAssets === "number"
         && typeof explicitLiabilities === "number"
@@ -281,6 +255,7 @@ export default function Dashboard() {
         'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect',
         'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseExcludingExchangeRateEffect',
         'us-gaap_CashAndCashEquivalentsPeriodIncreaseDecrease',
+        'hsic_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffectContinuingOperations',
         'ifrs-full_IncreaseDecreaseInCashAndCashEquivalentsBeforeEffectOfExchangeRateChanges',
         'ifrs-full_IncreaseDecreaseInCashAndCashEquivalents'
       ]);
@@ -364,7 +339,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   const toTitleCase = (str: string) => {
-    const exceptions = ["PG&E", "HP", "PLC"]; // add more as needed
+    const exceptions = ["PG&E", "HP", "EQT", "HCA", "EOG", "M&T", "KKR", "KLA", "MGM", "EPAM", "BIO-TECHNE", "PLC"]; // add more as needed
 
     return str
       .toLowerCase()
@@ -467,6 +442,7 @@ export default function Dashboard() {
                       // GAAP first, then IFRS fallback if you want
                       const incomeTaxVal = getTagValue(reportMap, [
                         'us-gaap_IncomeTaxExpenseBenefit',
+                        'us-gaap_CurrentIncomeTaxExpenseBenefit',
                         'ifrs-full_IncomeTaxExpenseContinuingOperations',
                       ]);
 
@@ -474,6 +450,7 @@ export default function Dashboard() {
                         'us-gaap_IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
                         'us-gaap_IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
                         'us-gaap_IncomeLossIncludingPortionAttributableToNoncontrollingInterest',
+                        'us-gaap_IncomeLossFromContinuingOperationsBeforeIncomeTaxesDomestic',
                         'mcd_IncomeLossFromContinuingOperationsBeforeIncomeTaxes',
                         'pg_IncomeLossFromContinuingOperationsBeforeIncomeTaxes',
                         'ifrs-full_ProfitLossBeforeTax',
@@ -679,6 +656,7 @@ export default function Dashboard() {
                         'us-gaap_CashAndCashEquivalentsAtCarryingValue',
                         'us-gaap_CashAndCashEquivalents',
                         'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
+                        'us-gaap_CashCashEquivalentsAndShortTermInvestments',
                         'us-gaap_Cash' // rare, but cheap fallback
                       ]) ?? 0;
 
@@ -690,23 +668,15 @@ export default function Dashboard() {
                       const cashAndSTI = (typeof cash === 'number' ? cash : 0) + (typeof shortTermInv === 'number' ? shortTermInv : 0);
 
                       // Try to read an explicit equity line first
-                      let totalEquity = strictGet(reportMap, [
-                        "Total stockholders’ equity",
-                        "Total shareholders’ equity",
-                        "Total shareholders' equity",
-                        "total shareholders' equity",
-                        "total equity",
-                        "total shareholders' equity (deficit)",
-                        "Total stockholders’ (deficit) equity",
-                        "Total stockholders’ equity (deficit)"
+                      let totalEquity = getTagValue(reportMap, [
+                        "us-gaap_StockholdersEquity",
+                        "us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
                       ]);
 
                       // If there was no explicit equity line, derive it from assets & liabilities
                       // (we don’t know liabilities yet, so we’ll compute equity after we get liabilities)
-                      const explicitLiabilities = strictGet(reportMap, [
-                        "Total liabilities",
-                        "Total Liabilities",
-                        "Liabilities"
+                      const explicitLiabilities = getTagValue(reportMap, [
+                        'us-gaap_Liabilities'
                       ]);
 
                       // Fallback: if we don’t have equity but *do* have assets & liabilities, derive equity
@@ -892,6 +862,7 @@ export default function Dashboard() {
                         'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect',
                         'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseExcludingExchangeRateEffect',
                         'us-gaap_CashAndCashEquivalentsPeriodIncreaseDecrease',
+                        'hsic_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffectContinuingOperations',
                         'ifrs-full_IncreaseDecreaseInCashAndCashEquivalentsBeforeEffectOfExchangeRateChanges',
                         'ifrs-full_IncreaseDecreaseInCashAndCashEquivalents'
 
