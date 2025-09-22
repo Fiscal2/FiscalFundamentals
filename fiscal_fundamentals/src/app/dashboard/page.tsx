@@ -123,25 +123,41 @@ export default function Dashboard() {
   const [data, setData] = useState<FinancialRow[]>([]);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch('http://localhost:8000/api/financials'); // use the actual API route
-        const json = await res.json();
-        //console.log('Fetched data:', json);
+  const ticker = searchParams.get('ticker')?.toUpperCase() ?? null;
+  if (!ticker) {
+    setData([]); // nothing selected so nothing to fetch
+    return;
+  }
 
-        if (Array.isArray(json)) {
-          setData(json);
-        } else {
-          console.error('Unexpected API response:', json);
-          setData([]);
-        }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
+  const url = `http://localhost:8000/api/financials/${encodeURIComponent(ticker)}`;
+
+  // avoid duplicate fetches in React 18 dev
+  let cancelled = false;
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+
+      if (!cancelled) {
+        // API returns an array for the ticker endpoint
+        setData(Array.isArray(json) ? json : Array.isArray(json.data) ? json.data : []);
+      }
+    } catch (err) {
+      if (!cancelled) {
+        console.error('Failed to fetch ticker data:', err);
+        setData([]);
       }
     }
+  })();
 
-    fetchData();
-  }, []);
+  return () => {
+    cancelled = true;
+    controller.abort();
+  };
+}, [searchParams]);
 
   useEffect(() => {
     if (!selected) return;
@@ -339,7 +355,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   const toTitleCase = (str: string) => {
-    const exceptions = ["PG&E", "HP", "EQT", "HCA", "EOG", "M&T", "KKR", "KLA", "MGM", "EPAM", "BIO-TECHNE", "PLC"]; // add more as needed
+    const exceptions = ["PG&E", "NVIDIA", "HP", "W.W.", "CBRE", "TE", "EQT", "HCA", "EOG", "ON", "M&T", "KKR", "KLA", "MGM", "EPAM", "BIO-TECHNE", "CBOE", "PLC"]; // add more as needed
 
     return str
       .toLowerCase()
@@ -490,10 +506,26 @@ export default function Dashboard() {
                           'us-gaap_AmortizationOfIntangibleAssets',
                           'us-gaap_RestructuringCharges',
                           'us-gaap_DepreciationDepletionAndAmortization',
-                          'ibm_IntellectualPropertyAndCustomDevelopmentIncome',
+                          'us-gaap_DepreciationAndAmortization',
+                          'us-gaap_AdjustmentForAmortization',
+                          'us-gaap_Depreciation',
+                          'us-gaap_GainLossOnSalesOfAssetsAndAssetImpairmentCharges',
+                          'us-gaap_GainLossRelatedToLitigationSettlement',
 
                           // If the statement uses an operating "other" line:
                           'us-gaap_OtherOperatingIncomeExpenseNet',       // NOTE: exclude Nonoperating version
+                          'us-gaap_OtherCostAndExpenseOperating',
+
+                          // Company specific
+                          'ibm_IntellectualPropertyAndCustomDevelopmentIncome',
+                          'cah_Amortizationandotheracquisitionrelatedcosts',
+                          'cah_AcquisitionRelatedCashAndShareBasedCompensationCosts',
+                          'bro_EmployeeCompensationAndBenefits',
+                          'dltr_SellingGeneralandAdministrativeExpenseIncludingImpairmentCharges',
+                          'cbre_OperatingAdministrativeAndOtherExpenses',
+                          'tel_ResearchAndDevelopmentAndEngineeringExpense',
+                          'tel_RestructuringAndAssetImpairmentChargesCreditsAndDisposalGroupNotDiscontinuedOperationGainLossOnDisposal',
+                          'tel_BusinessAcquisitionCostOfAcquiredEntityTransactionCostsAndBusinessCombinationIntegrationRelatedCosts'
 
                         ];
 
@@ -652,20 +684,61 @@ export default function Dashboard() {
 
                       const totalAssets = strictGet(reportMap, ["Total assets", "Assets"]);
 
-                      const cash = getTagValue(reportMap, [
+                      const calculateCashAndSTI = (reportMap: Record<string, ReportItem>) => {
+                      // Primary cash tags (mutually exclusive - use first found)
+                      const cashTags = [
                         'us-gaap_CashAndCashEquivalentsAtCarryingValue',
-                        'us-gaap_CashAndCashEquivalents',
+                        'us-gaap_CashAndCashEquivalents', 
                         'us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
-                        'us-gaap_CashCashEquivalentsAndShortTermInvestments',
-                        'us-gaap_Cash' // rare, but cheap fallback
-                      ]) ?? 0;
+                        'us-gaap_CashCashEquivalentsAndShortTermInvestments', // This includes STI, so handle specially
+                        'us-gaap_Cash'
+                      ];
 
-                      const shortTermInv = getTagValue(reportMap, [
+                      // Short-term investment tags (additive if not included in comprehensive cash tag)
+                      const shortTermInvestmentTags = [
                         'us-gaap_ShortTermInvestments',
-                        'us-gaap_MarketableSecuritiesCurrent'
-                      ]) ?? 0;
+                        'us-gaap_OtherShortTermInvestments',
+                        'us-gaap_MarketableSecurities', // Often short-term
+                        'us-gaap_MarketableSecuritiesCurrent',
+                        'us-gaap_AvailableForSaleSecuritiesCurrent',
+                        'us-gaap_TradingSecuritiesCurrent',
+                        'us-gaap_DebtSecuritiesAvailableForSaleCurrent',
+                        'dxcm_DebtSecuritiesAvailableForSaleAndEquitySecurities',
+                        'us-gaap_EquitySecuritiesFvNi'
+                      ];
 
-                      const cashAndSTI = (typeof cash === 'number' ? cash : 0) + (typeof shortTermInv === 'number' ? shortTermInv : 0);
+                      // Get primary cash value
+                      const cash = getTagValue(reportMap, cashTags) ?? 0;
+                      
+                      // Check if we got a comprehensive cash tag that includes short-term investments
+                      const usedCashTag = cashTags.find(tag => getTagValue(reportMap, [tag]) !== null);
+                      const isComprehensiveCashTag = usedCashTag === 'us-gaap_CashCashEquivalentsAndShortTermInvestments';
+                      
+                      let shortTermInvestments = 0;
+                      
+                      if (!isComprehensiveCashTag) {
+                        // Sum all short-term investment components
+                        for (const tag of shortTermInvestmentTags) {
+                          const value = getTagValue(reportMap, [tag]);
+                          if (typeof value === 'number') {
+                            shortTermInvestments += value;
+                          }
+                        }
+                      }
+                      
+                      const cashAndSTI = cash + shortTermInvestments;
+                      
+                      return {
+                        cash,
+                        shortTermInvestments,
+                        cashAndSTI,
+                        usedCashTag,
+                        isComprehensive: isComprehensiveCashTag
+                      };
+                    };
+
+                    const cashResult = calculateCashAndSTI(reportMap);
+                    const cashAndSTI = cashResult.cashAndSTI;
 
                       // Try to read an explicit equity line first
                       let totalEquity = getTagValue(reportMap, [
@@ -887,22 +960,38 @@ export default function Dashboard() {
                         // classic PP&E
                         'us-gaap_PaymentsToAcquirePropertyPlantAndEquipment',
                         'us-gaap_PaymentsToAcquireProductiveAssets',
-                        'us-gaap_PaymentsToAcquireOtherProductiveAssets',
-                        'ifrs-full_PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities',
-                        'ifrs-full_AcquisitionOfPropertyPlantAndEquipment',
+                        'us-gaap_PaymentsToAcquireBuildings',
+                        'us-gaap_PaymentsToAcquireMachineryAndEquipment',
+                        'us-gaap_PaymentsToAcquireFurnitureAndFixtures',
+                        'us-gaap_PaymentsToAcquireComputers',
+                        'us-gaap_PaymentsToAcquireTransportationEquipment',
 
-                        // REIT / real-estate style
+                        // REIT / Real Estate
                         'us-gaap_PaymentsForCapitalImprovements',
                         'us-gaap_PaymentsToAcquireCommercialRealEstate',
                         'us-gaap_PaymentsToAcquireRealEstate',
+                        'us-gaap_PaymentsToAcquireRealEstateHeldForInvestment',
+
+                        // IFRS equivalents
+                        'ifrs-full_PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities',
+                        'ifrs-full_AcquisitionOfPropertyPlantAndEquipment',
+                        'ifrs-full_PaymentsToAcquirePropertyPlantAndEquipment',
+
+                        // Other variations
+                        'us-gaap_PaymentsForProceedsFromProductiveAssets',
+                        'us-gaap_PaymentsToAcquireOtherPropertyPlantAndEquipment'
                       ];
 
                       // CapEx proceeds tags (to subtract)
                       const capexProceedsTags = [
                         'us-gaap_ProceedsFromSaleOfPropertyPlantAndEquipment',
                         'us-gaap_ProceedsFromSaleOfProductiveAssets',
-                        'us-gaap_ProceedsFromSaleOfPropertyHeldForSale', // common in REITs
+                        'us-gaap_ProceedsFromSaleOfPropertyHeldForSale',
+                        'us-gaap_ProceedsFromSaleOfBuildings',
+                        'us-gaap_ProceedsFromSaleOfMachineryAndEquipment',
+                        'us-gaap_ProceedsFromDisposalOfPropertyPlantAndEquipment',
                         'ifrs-full_ProceedsFromSalesOfPropertyPlantAndEquipment',
+                        'ifrs-full_ProceedsFromDisposalsOfPropertyPlantAndEquipment'
                       ];
 
                       // signed sums (cash flow sign convention: outflows typically negative)
@@ -919,7 +1008,6 @@ export default function Dashboard() {
                       const freeCashFlow = (typeof netOperating === 'number' && typeof capexOutflow === 'number')
                         ? netOperating - capexOutflow
                         : null;
-
 
                       const rows = [
                         { label: "Net Income", value: netIncome },

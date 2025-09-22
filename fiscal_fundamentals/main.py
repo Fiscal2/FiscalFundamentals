@@ -58,11 +58,78 @@ def get_financials_by_ticker(ticker: str):
     
     result = supabase.table("financials").select("ticker, year, quarter, income_statement, balance_sheet, cash_flow, company_name, listed_exchange").eq("ticker", ticker.upper()).execute()
     
-    cache[cache_key] = {
+    ticker_cache[cache_key] = {
         "data": result.data,
         "timestamp": datetime.now()
     }
     return result.data
+
+
+@router.get("/api/tickers")
+def list_tickers():
+    """
+    Small payload for the search bar.
+    Returns only ticker, company_name, listed_exchange.
+    Handles Supabase 1,000 row cap via paging.
+    """
+    try:
+        page_size = 1000
+        start = 0
+        all_rows = []
+
+        while True:
+            # deterministic order so pages are stable
+            res = (
+                supabase.table("financials")
+                .select("ticker, company_name, listed_exchange")
+                .order("ticker", desc=False)
+                .range(start, start + page_size - 1)
+                .execute()
+            )
+            batch = res.data or []
+            all_rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            start += page_size
+
+        # Smart deduplication: keep the best entry for each ticker
+        ticker_best = {}
+        for r in all_rows:
+            t = (r.get("ticker") or "").upper().strip()
+            if not t:
+                continue
+
+            company_name = (r.get("company_name") or "").strip()
+            listed_exchange = r.get("listed_exchange") or ""
+
+            score = 0
+            if company_name:
+                score += 10
+            if listed_exchange and (isinstance(listed_exchange, str) or (isinstance(listed_exchange, list) and len(listed_exchange) > 0)):
+                score += 5
+            if len(company_name) > 5:
+                score += 2
+
+            candidate = {
+                "ticker": t,
+                "company_name": company_name,
+                "listed_exchange": listed_exchange,
+                "score": score,
+            }
+            if t not in ticker_best or candidate["score"] > ticker_best[t]["score"]:
+                ticker_best[t] = candidate
+
+        return [
+            {
+                "ticker": v["ticker"],
+                "company_name": v["company_name"],
+                "listed_exchange": v["listed_exchange"],
+            }
+            for v in ticker_best.values()
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch tickers: {e}")
+
 
 @router.get("/api/financials")
 def get_financials(force_refresh: bool = Query(False, description="Force refresh cache")):
@@ -86,7 +153,7 @@ def get_financials(force_refresh: bool = Query(False, description="Force refresh
         
         while True:
             # Fetch data with pagination
-            result = supabase.table("financials").select("*").range(start, start + page_size - 1).execute()
+            result = supabase.table("financials").select("ticker, year, quarter, income_statement, balance_sheet, cash_flow, company_name, listed_exchange").range(start, start + page_size - 1).execute()
             page_count += 1
             
             print(f"Page {page_count}: Fetched {len(result.data) if result.data else 0} records (range {start}-{start + page_size - 1})")
@@ -126,10 +193,11 @@ def cache_status():
     }
     
 # Endpoint to check cache status
-@router.post("/api/cache/clear")
+@router.get("/api/cache/clear")
 def clear_cache():
     cache["data"] = None
     cache["timestamp"] = None
+    ticker_cache.clear()
     return {"message": "Cache cleared"}
 
 # Include router

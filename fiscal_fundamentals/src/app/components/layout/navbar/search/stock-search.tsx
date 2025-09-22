@@ -24,7 +24,7 @@ export default function StockSearch({
   const fuse = useMemo(() => {
     return new Fuse(allTickers, {
         keys: ['ticker', 'companyName', 'listedExchange'],
-        threshold: 0.4, // adjust as needed
+        threshold: 0.4, 
         ignoreLocation: true
     });
     }, [allTickers]);

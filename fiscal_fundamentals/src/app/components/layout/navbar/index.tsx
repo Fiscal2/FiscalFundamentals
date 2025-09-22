@@ -22,50 +22,40 @@ const MENU_ITEMS = [
 export function Navbar() {
   const [tickers, setTickers] = useState<StockItem[]>([]);
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchTickers() {
       try {
-        const res = await fetch('http://localhost:8000/api/financials');
-        const json = (await res.json()) as {
-            ticker: string;
-            company_name?: string;
-            listed_exchange: string;
-            quarter: number;
-        }[];
+        const res = await fetch('http://localhost:8000/api/tickers');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json() as Array<{
+          ticker: string;
+          company_name?: string;
+          listed_exchange?: string | string[] | null;
+        }>;
 
+        if (cancelled) return;
 
-        const unique: StockItem[] = Array.from(
-        new Map(
-            json
-            .filter(row => row.quarter === 0)
-            .map(row => {
-                let ex = row.listed_exchange;
+        const list: StockItem[] = json.map((row) => {
+          let ex = row.listed_exchange;
+          if (typeof ex === 'string') {
+            try { ex = JSON.parse(ex); } catch {}
+          }
+          return {
+            ticker: row.ticker.toUpperCase(),
+            companyName: (row.company_name || 'Unknown').trim(),
+            listedExchange: Array.isArray(ex) ? ex : (ex ? [String(ex)] : null),
+          };
+        });
 
-                // if JSONB came back as a string, parse it
-                if (typeof ex === 'string') {
-                try { ex = JSON.parse(ex); } catch {}
-                }
-
-                return [
-                row.ticker,
-                {
-                    ticker: row.ticker,
-                    companyName: row.company_name?.trim() || 'Unknown',
-                    listedExchange: Array.isArray(ex) ? ex : (ex ? [String(ex)] : null),
-                } as StockItem
-                ];
-            })
-        ).values()
-        );
-
-
-
-        setTickers(unique);
-      } catch (error) {
-        console.error('Failed to fetch tickers:', error);
+        setTickers(list);
+      } catch (err) {
+        if (!cancelled) console.error('Failed to fetch tickers:', err);
       }
     }
 
     fetchTickers();
+    return () => { cancelled = true; };
   }, []);
   return (
     <nav className="relative flex items-center justify-between p-5 lg:px-6">
