@@ -7,6 +7,7 @@ import MobileMenu from './mobile-menu';
 import Image from 'next/image';
 import StockSearch from './search/stock-search';
 import { StockItem } from '@/app/lib/types';
+import { getCompanies } from '@/app/lib/warehouse';
 
 const SITE_NAME_LINE_1 = 'Castling';
 const SITE_NAME_LINE_2 = 'Financial';
@@ -24,37 +25,15 @@ export function Navbar() {
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchTickers() {
+    (async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/tickers');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json() as Array<{
-          ticker: string;
-          company_name?: string;
-          listed_exchange?: string | string[] | null;
-        }>;
-
-        if (cancelled) return;
-
-        const list: StockItem[] = json.map((row) => {
-          let ex = row.listed_exchange;
-          if (typeof ex === 'string') {
-            try { ex = JSON.parse(ex); } catch {}
-          }
-          return {
-            ticker: row.ticker.toUpperCase(),
-            companyName: (row.company_name || 'Unknown').trim(),
-            listedExchange: Array.isArray(ex) ? ex : (ex ? [String(ex)] : null),
-          };
-        });
-
-        setTickers(list);
+        const list = await getCompanies();
+        if (!cancelled) setTickers(list);
       } catch (err) {
-        if (!cancelled) console.error('Failed to fetch tickers:', err);
+        if (!cancelled) console.error('Failed to load companies:', err);
       }
-    }
+    })();
 
-    fetchTickers();
     return () => { cancelled = true; };
   }, []);
   return (
