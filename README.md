@@ -44,12 +44,13 @@ See [`.env.example`](./.env.example). Required:
 
 ## Architecture
 
-- `src/app/lib/warehouse.ts` — Supabase data access + per-session caching. Owns
+- `src/lib/warehouse.ts` — Supabase data access + per-session caching. Owns
   *where rows come from*.
-- `src/app/lib/xbrl.ts` — pure XBRL interpretation: tag dictionaries and the
+- `src/lib/xbrl.ts` — pure XBRL interpretation: tag dictionaries and the
   statement/Overview derivation. No network; unit-testable from row fixtures.
-- `src/app/lib/company-name.ts` — display-name normalization (EDGAR suffix
+- `src/lib/company-name.ts` — display-name normalization (EDGAR suffix
   stripping, casing, entity forms) shared by the header and search.
-- `src/app/lib/tickers.ts` — bundled SEC ticker ↔ CIK map.
-- `src/app/dashboard/` — the dashboard route (`page.tsx`) and its colocated
-  `statements-view.tsx`.
+- `src/lib/tickers.ts` — bundled SEC ticker ↔ CIK map.
+- `src/components/layout/` — navbar (with search) and footer.
+- `src/app/` — routes only: `page.tsx` (home), `about/`, and `dashboard/`
+  (`page.tsx` + colocated `statements-view.tsx`).
