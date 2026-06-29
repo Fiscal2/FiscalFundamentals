@@ -47,13 +47,16 @@ export default function Dashboard() {
 
   const [overview, setOverview] = useState<AnnualOverview[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Start in the loading state when we already have a company to fetch, so the
+  // first paint shows the spinner instead of a flash of "No data available".
+  const [loading, setLoading] = useState(cik != null);
   const [tab, setTab] = useState<'overview' | 'statements'>('overview');
   const [warehouseName, setWarehouseName] = useState<string | null>(null);
 
   useEffect(() => {
     if (cik == null) {
       setOverview([]);
+      setLoading(false);
       return;
     }
     let cancelled = false;
@@ -256,11 +259,17 @@ export default function Dashboard() {
 
       {tab === 'statements' && cik != null && <StatementsView cik={cik} />}
 
+      {tab === 'overview' && loading && (
+        <div className="mt-8 flex items-center justify-center py-20" role="status" aria-label="Loading">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+        </div>
+      )}
+
       {tab === 'overview' && tickerParam && !loading && overview.length === 0 && (
         <p className="text-gray-500 mt-4">No data available for {displayTicker}.</p>
       )}
 
-      {tab === 'overview' && overview.length > 0 && (
+      {tab === 'overview' && !loading && overview.length > 0 && (
         <div className="mt-8">
           <h2 className="text-xl font-semibold mb-2">Revenue vs Net Income for {displayTicker}</h2>
           <div className="w-[95%] mx-auto">
