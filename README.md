@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Data Accuracy
+
+Every figure in our 2024/2025 data is the exact value the company itself reported to the SEC in its official XBRL filing — not an estimate or a re-derived number. For any data point we can hand you the precise filing (accession number), the exact tag, the period, and the units it came from. We never alter the underlying value, and we use exact decimal math so nothing rounds or drifts. We verify it three independent ways: it ties back bit-for-bit to the SEC's bulk source files, it matches the SEC's separate company-facts API to the penny, and every statement internally reconciles (the balance sheet balances, the cash flow ties out). Yahoo and Google normalize and recompute figures from vendor feeds, which is where transformation errors creep in and why their numbers sometimes disagree with the filing — we carry the filing's own numbers, with a traceable link back to the document.
+
 ## Getting Started
 
 First, run the development server:

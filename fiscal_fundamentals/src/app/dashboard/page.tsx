@@ -4,9 +4,10 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, XAxisProps, YAxis, Legend, ResponsiveContainer, LabelList, LabelProps, ReferenceLine } from 'recharts';
 import { useSearchParams } from 'next/navigation';
-import { getAnnualOverview } from '@/app/lib/warehouse';
+import { getAnnualOverview, getCompanyName } from '@/app/lib/warehouse';
 import { AnnualOverview } from '@/app/lib/types';
 import { tickerToCik, cikToTicker } from '@/app/lib/tickers';
+import { formatCompanyName } from '@/app/lib/company-name';
 import StatementsView from './statements-view';
 
 const formatDollars = (value: number) => {
@@ -48,6 +49,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<'overview' | 'statements'>('overview');
+  const [warehouseName, setWarehouseName] = useState<string | null>(null);
 
   useEffect(() => {
     if (cik == null) {
@@ -79,6 +81,26 @@ export default function Dashboard() {
     }
     setSelectedYear(Math.max(...overview.map((o) => o.year)));
   }, [overview]);
+
+  useEffect(() => {
+    if (cik == null) {
+      setWarehouseName(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const name = await getCompanyName(cik);
+        if (!cancelled) setWarehouseName(name);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to fetch company name:', err);
+          setWarehouseName(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [cik]);
 
   const incomeChartData = overview.map((o) => ({
     year: o.year,
@@ -149,22 +171,9 @@ export default function Dashboard() {
     );
   };
 
-  const toTitleCase = (str: string) => {
-    const exceptions = ["PG&E", "NVIDIA", "HP", "W.W.", "CBRE", "TE", "EQT", "HCA", "EOG", "ON", "M&T", "KKR", "KLA", "MGM", "EPAM", "BIO-TECHNE", "CBOE", "PLC", "INC", "INC.", "CORP", "CORP.", "LLC"];
-    return str
-      .toLowerCase()
-      .split(" ")
-      .map((word) => {
-        const upperWord = word.toUpperCase();
-        if (exceptions.includes(upperWord)) return upperWord;
-        return word.charAt(0).toUpperCase() + word.slice(1);
-      })
-      .join(" ");
-  };
-
   const info = cik != null ? cikToTicker(cik) : null;
   const displayTicker = (info?.ticker ?? tickerParam ?? '').toUpperCase();
-  const companyName = toTitleCase(info?.name ?? displayTicker);
+  const companyName = formatCompanyName(warehouseName ?? info?.name ?? displayTicker);
   const listedExchange = info?.exchange ?? '';
 
   const incomeRows: { label: string; value: number | null; kind: CellKind }[] = selected

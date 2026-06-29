@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { StockItem } from '@/app/lib/types';
+import { formatCompanyName } from '@/app/lib/company-name';
 import { useRouter } from 'next/navigation';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import MobileSearchModal from '../mobile-search-modal';
@@ -60,10 +61,6 @@ export default function StockSearch({
       }
     }
   }
-
-  function formatCompanyName(name: string): string {
-  return name.replace(/[^A-Z0-9 .&]/gi, '').toUpperCase().trim();
-}
 
  return (
     <div className="relative w-full max-w-sm">

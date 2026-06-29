@@ -36,3 +36,58 @@ export function cikToTicker(cik: number): TickerInfo | null {
   if (!cikToInfoMap) build();
   return cikToInfoMap!.get(Number(cik)) ?? null;
 }
+
+// --- Proper-casing for stylized (camelCase) company names ---
+//
+// SEC filing names are usually ALL CAPS, which naive title-casing renders as
+// e.g. "Blackrock". The ticker file, however, stores the correct casing for
+// hundreds of camelCase brands ("BlackRock", "PayPal", ...). We harvest the
+// dominant clean-camelCase spelling of each token so the UI can restore it.
+// CLEAN_CAMEL intentionally skips non-standard stylizations (e.g. "BlockchAIn",
+// "iMAGE", "AIxCrypto") so ordinary words are never mangled.
+const CLEAN_CAMEL = /^[A-Za-z][a-z]*([A-Z][a-z]+)+$/;
+const stripEnds = (w: string) => w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9.&]+$/g, '');
+
+let tokenCaseMap: Map<string, string> | null = null;
+
+function buildTokenCase() {
+  const formCounts = new Map<string, Map<string, number>>();
+  for (const row of rows) {
+    const name = row[1];
+    if (!name) continue;
+    for (const raw of name.split(/\s+/)) {
+      const word = stripEnds(raw);
+      if (!word || !/[a-z][A-Z]/.test(word) || !CLEAN_CAMEL.test(word)) continue;
+      const key = word.toLowerCase();
+      let forms = formCounts.get(key);
+      if (!forms) {
+        forms = new Map();
+        formCounts.set(key, forms);
+      }
+      forms.set(word, (forms.get(word) ?? 0) + 1);
+    }
+  }
+  // Keep the most common spelling for each token.
+  tokenCaseMap = new Map();
+  for (const [key, forms] of formCounts) {
+    let best = '';
+    let bestCount = -1;
+    for (const [form, count] of forms) {
+      if (count > bestCount) {
+        best = form;
+        bestCount = count;
+      }
+    }
+    tokenCaseMap.set(key, best);
+  }
+}
+
+/**
+ * Canonical camelCase spelling of a single name token (e.g. "blackrock" ->
+ * "BlackRock") if the SEC ticker data knows one, else null.
+ */
+export function properCaseToken(word: string): string | null {
+  if (!tokenCaseMap) buildTokenCase();
+  const key = stripEnds(word).toLowerCase();
+  return tokenCaseMap!.get(key) ?? null;
+}

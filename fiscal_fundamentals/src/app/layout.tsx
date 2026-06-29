@@ -22,6 +22,17 @@ export const metadata: Metadata = {
   },
 };
 
+// Origin of the Supabase warehouse, used to warm the TLS/DNS connection during
+// page load so the first data query doesn't pay the handshake on the critical
+// path (the dominant cost of the first Overview load).
+const supabaseOrigin = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').origin;
+  } catch {
+    return null;
+  }
+})();
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -29,6 +40,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {supabaseOrigin && (
+          <>
+            <link rel="preconnect" href={supabaseOrigin} crossOrigin="anonymous" />
+            <link rel="dns-prefetch" href={supabaseOrigin} />
+          </>
+        )}
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
