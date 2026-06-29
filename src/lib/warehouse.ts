@@ -10,7 +10,6 @@ import {
 import {
   RawLineItem,
   STATEMENT_CODES,
-  ANNUAL_FORMS,
   groupStatements,
   buildAnnualOverview,
 } from './xbrl';
@@ -237,21 +236,75 @@ export async function getStatements(adsh: string): Promise<Statements> {
 /**
  * Per-year Overview metrics for a company, one row per annual filing,
  * reconstructed from each filing's statements. Sorted oldest -> newest.
+ *
+ * Single round trip: the `annual_line_items` view joins `filing` + `line_item`,
+ * so every annual filing's rows arrive in one request keyed by `cik` — instead
+ * of a `filing` query followed by a dependent per-filing `line_item` query.
+ * Rows are also written into the shared per-adsh cache so the Statements tab
+ * stays instant once the Overview has loaded.
  */
 export async function getAnnualOverview(cik: number): Promise<AnnualOverview[]> {
-  const filings = await getFilings(cik);
-  const annual = filings.filter((f) => ANNUAL_FORMS.has(f.form));
-  if (annual.length === 0) return [];
+  // Warm the full filings list in the background (parallel, non-blocking) so the
+  // Statements tab's filing picker is ready without its own round trip. The
+  // annual view only carries annual forms, so the picker still needs this.
+  void getFilings(cik).catch(() => {});
 
-  const perFiling = await Promise.all(
-    annual.map(async (f) => {
-      const rows = await fetchLineItems(f.adsh);
-      return buildAnnualOverview(f, rows);
-    })
+  const { data, error } = await supabase
+    .from('annual_line_items')
+    .select('adsh, form, period, fy, fp, filed, stmt, line, plabel, tag, value, uom, qtrs, ddate')
+    .eq('cik', cik)
+    .in('stmt', STATEMENT_CODES)
+    .order('line')
+    .order('ddate');
+
+  if (error) throw error;
+  if (!data || data.length === 0) return [];
+
+  // Group the flat result back into one bundle per filing.
+  const byAdsh = new Map<string, { filing: FilingMeta; rows: RawLineItem[] }>();
+  for (const raw of data) {
+    const adsh = String(raw.adsh);
+    let entry = byAdsh.get(adsh);
+    if (!entry) {
+      entry = {
+        filing: {
+          adsh,
+          form: raw.form,
+          period: raw.period ?? null,
+          fy: raw.fy ?? null,
+          fp: raw.fp ?? null,
+          filed: raw.filed ?? null,
+        },
+        rows: [],
+      };
+      byAdsh.set(adsh, entry);
+    }
+    entry.rows.push({
+      line: Number(raw.line),
+      plabel: raw.plabel ?? null,
+      tag: raw.tag,
+      // numeric(28,4) may arrive as a string; coerce for formatting.
+      value: raw.value === null || raw.value === undefined ? null : Number(raw.value),
+      uom: raw.uom,
+      qtrs: Number(raw.qtrs),
+      ddate: String(raw.ddate),
+      stmt: raw.stmt as StatementCode,
+    });
+  }
+
+  // Newest filing first so that when two filings report the same fiscal year,
+  // dedup below keeps the most recent one (matches the old getFilings order).
+  const entries = Array.from(byAdsh.values()).sort(
+    (a, b) =>
+      (b.filing.period ?? '').localeCompare(a.filing.period ?? '') ||
+      (b.filing.filed ?? '').localeCompare(a.filing.filed ?? '')
   );
 
   const byYear = new Map<number, AnnualOverview>();
-  for (const o of perFiling) {
+  for (const { filing, rows } of entries) {
+    // Warm the Statements-tab cache for this filing.
+    if (!lineItemsCache.has(filing.adsh)) lineItemsCache.set(filing.adsh, rows);
+    const o = buildAnnualOverview(filing, rows);
     if (o && !byYear.has(o.year)) byYear.set(o.year, o);
   }
   return Array.from(byYear.values()).sort((a, b) => a.year - b.year);
