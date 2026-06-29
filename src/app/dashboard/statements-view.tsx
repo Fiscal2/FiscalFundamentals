@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { getFilings, getStatements } from '@/lib/warehouse';
+import { Spinner } from '@/components/spinner';
 import {
   FilingMeta,
   LineItemRow,
@@ -139,7 +140,7 @@ export default function StatementsView({ cik }: { cik: number }) {
   );
 
   if (!filingsLoaded) {
-    return <p className="text-gray-500 mt-4">Loading filings…</p>;
+    return <Spinner className="mt-8 py-20" />;
   }
 
   if (filings.length === 0) {
@@ -166,7 +167,7 @@ export default function StatementsView({ cik }: { cik: number }) {
         </select>
       </div>
 
-      {loading && <p className="text-gray-500">Loading statements…</p>}
+      {loading && <Spinner className="py-12" />}
 
       {!loading && statements && (
         <div className="space-y-10">

@@ -8,6 +8,7 @@ import { getAnnualOverview, getCompanyName } from '@/lib/warehouse';
 import { AnnualOverview } from '@/lib/types';
 import { tickerToCik, cikToTicker } from '@/lib/tickers';
 import { formatCompanyName } from '@/lib/company-name';
+import { Spinner } from '@/components/spinner';
 import StatementsView from './statements-view';
 
 const formatDollars = (value: number) => {
@@ -259,11 +260,7 @@ export default function Dashboard() {
 
       {tab === 'statements' && cik != null && <StatementsView cik={cik} />}
 
-      {tab === 'overview' && loading && (
-        <div className="mt-8 flex items-center justify-center py-20" role="status" aria-label="Loading">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
-        </div>
-      )}
+      {tab === 'overview' && loading && <Spinner className="mt-8 py-20" />}
 
       {tab === 'overview' && tickerParam && !loading && overview.length === 0 && (
         <p className="text-gray-500 mt-4">No data available for {displayTicker}.</p>
