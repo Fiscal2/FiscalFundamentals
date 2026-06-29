@@ -1,4 +1,16 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Castling Financial — SEC Fundamentals Dashboard
+
+A Next.js (App Router) dashboard for exploring U.S. and foreign-issuer company
+fundamentals sourced directly from SEC XBRL filings. Search a company and view a
+multi-year Overview (revenue, margins, balance sheet, cash flow) and the full
+Income Statement / Balance Sheet / Cash Flow for each filing.
+
+## Stack
+
+- **Next.js 16** (App Router) + **React 19** + **TypeScript**
+- **Tailwind CSS 4**
+- **Recharts** for charts, **Fuse.js** for fuzzy search
+- **Supabase** (Postgres warehouse) read directly from the client via `@supabase/supabase-js`
 
 ## Data Accuracy
 
@@ -6,35 +18,38 @@ Every figure in our 2024/2025 data is the exact value the company itself reporte
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
+cp .env.example .env   # then fill in your Supabase values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See [`.env.example`](./.env.example). Required:
 
-## Learn More
+- `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL (browser-safe)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon key (browser-safe by design)
 
-To learn more about Next.js, take a look at the following resources:
+`.env` is gitignored and must never be committed.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `npm run dev` — start the dev server
+- `npm run build` — production build
+- `npm run start` — serve the production build
+- `npm run lint` — ESLint
 
-## Deploy on Vercel
+## Architecture
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/app/lib/warehouse.ts` — Supabase data access + per-session caching. Owns
+  *where rows come from*.
+- `src/app/lib/xbrl.ts` — pure XBRL interpretation: tag dictionaries and the
+  statement/Overview derivation. No network; unit-testable from row fixtures.
+- `src/app/lib/company-name.ts` — display-name normalization (EDGAR suffix
+  stripping, casing, entity forms) shared by the header and search.
+- `src/app/lib/tickers.ts` — bundled SEC ticker ↔ CIK map.
+- `src/app/dashboard/` — the dashboard route (`page.tsx`) and its colocated
+  `statements-view.tsx`.

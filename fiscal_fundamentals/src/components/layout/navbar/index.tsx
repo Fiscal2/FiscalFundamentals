@@ -1,4 +1,3 @@
-// components/navbar/index.tsx
 'use client';
 
 import Link from 'next/link';
@@ -6,8 +5,8 @@ import { Suspense, useEffect, useState } from 'react';
 import MobileMenu from './mobile-menu';
 import Image from 'next/image';
 import StockSearch from './search/stock-search';
-import { StockItem } from '@/app/lib/types';
-import { getCompanies } from '@/app/lib/warehouse';
+import { StockItem } from '@/lib/types';
+import { getCompanies } from '@/lib/warehouse';
 
 const SITE_NAME_LINE_1 = 'Castling';
 const SITE_NAME_LINE_2 = 'Financial';

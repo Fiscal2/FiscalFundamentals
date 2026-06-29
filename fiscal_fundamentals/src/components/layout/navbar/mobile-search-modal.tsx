@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { StockItem } from '@/app/lib/types';
+import { StockItem } from '@/lib/types';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 interface Props {

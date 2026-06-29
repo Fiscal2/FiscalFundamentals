@@ -4,10 +4,10 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, XAxisProps, YAxis, Legend, ResponsiveContainer, LabelList, LabelProps, ReferenceLine } from 'recharts';
 import { useSearchParams } from 'next/navigation';
-import { getAnnualOverview, getCompanyName } from '@/app/lib/warehouse';
-import { AnnualOverview } from '@/app/lib/types';
-import { tickerToCik, cikToTicker } from '@/app/lib/tickers';
-import { formatCompanyName } from '@/app/lib/company-name';
+import { getAnnualOverview, getCompanyName } from '@/lib/warehouse';
+import { AnnualOverview } from '@/lib/types';
+import { tickerToCik, cikToTicker } from '@/lib/tickers';
+import { formatCompanyName } from '@/lib/company-name';
 import StatementsView from './statements-view';
 
 const formatDollars = (value: number) => {

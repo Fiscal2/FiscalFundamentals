@@ -2,7 +2,7 @@
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useEffect, useState } from 'react';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
-import { MenuItem } from '@/app/lib/types';
+import { MenuItem } from '@/lib/types';
 import Link from 'next/link';
 
 export default function MobileMenu({ menu }: { menu: MenuItem[] }) {

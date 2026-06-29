@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getFilings, getStatements } from '@/app/lib/warehouse';
+import { getFilings, getStatements } from '@/lib/warehouse';
 import {
   FilingMeta,
   LineItemRow,
   Statements,
   StatementCode,
-} from '@/app/lib/types';
+} from '@/lib/types';
 
 const STATEMENT_TITLES: Record<StatementCode, string> = {
   IS: 'Income Statement',
