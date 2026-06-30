@@ -14,8 +14,8 @@ const SITE_NAME_LINE_2 = 'Financial';
 const MENU_ITEMS = [
   { title: 'Home', path: '/' },
   { title: 'About', path: '/about' },
-  { title: 'Services', path: '/' },
-  { title: 'Contact', path: '/' }
+  { title: 'Services', path: '/services' },
+  { title: 'Contact', path: '/contact' }
 ];
 
 
@@ -53,7 +53,7 @@ export function Navbar() {
             prefetch={true}
             className="mr-5 flex w-full items-center justify-center md:w-auto lg:mr-6"
           >
-            <Image src="/castlingFinancialPieces.png" alt="Logo" width={50} height={50} className="rounded" />
+            <Image src="/castlingFinancialPieces.png" alt="Logo" width={50} height={50} className="rounded h-[50px] w-[50px]" />
             <div className="ml-2 mr-5 flex-none text-sm font-bold md:hidden lg:block">
               {SITE_NAME_LINE_1}<br />{SITE_NAME_LINE_2}
             </div>
