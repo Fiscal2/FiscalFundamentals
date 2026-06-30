@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, XAxisProps, YAxis, Legend, ResponsiveContainer, LabelList, LabelProps, ReferenceLine } from 'recharts';
 import { AnnualOverview } from '@/lib/types';
 
@@ -42,6 +43,27 @@ const MetricsTable = ({ rows }: { rows: { label: string; value: number | null; k
   </table>
 );
 
+// Module-scoped for a stable identity; an inline render prop re-runs the labels on every click.
+const renderCustomBarLabel = (props: LabelProps) => {
+  const { x, y, width, value } = props;
+  const xPos = typeof x === 'number' ? x : parseFloat(x || '0');
+  const yPos = typeof y === 'number' ? y : parseFloat(y || '0');
+  const barWidth = typeof width === 'number' ? width : parseFloat(width || '0');
+  if (typeof value !== 'number') return null;
+  return (
+    <text
+      x={xPos + barWidth / 2}
+      y={yPos - 6}
+      fill="#FFFFFF"
+      fontSize={15}
+      className="font-bold"
+      textAnchor="middle"
+    >
+      {formatDollars(value)}
+    </text>
+  );
+};
+
 export default function OverviewCharts({
   overview,
   selectedYear,
@@ -51,42 +73,40 @@ export default function OverviewCharts({
   selectedYear: number | null;
   setSelectedYear: (year: number) => void;
 }) {
-  const incomeChartData = overview.map((o) => ({
-    year: o.year,
-    revenue: o.revenue ?? 0,
-    netIncome: o.netIncome ?? 0,
-  }));
-  const balanceChartData = overview.map((o) => ({
-    year: o.year,
-    assets: o.totalAssets ?? 0,
-    liabilities: o.totalLiabilities ?? 0,
-  }));
-  const cashFlowChartData = overview.map((o) => ({
-    year: o.year,
-    netChange: o.netChangeInCash ?? 0,
-  }));
+  // Animate once on entrance, then disable it so year clicks don't blank the
+  // value labels (Recharts hides them while a bar animation is in progress).
+  const [animateBars, setAnimateBars] = useState(true);
+  const stopBarAnimation = () => setAnimateBars(false);
+
+  // Stable refs so selecting a year doesn't replay the bar animation.
+  const incomeChartData = useMemo(
+    () =>
+      overview.map((o) => ({
+        year: o.year,
+        revenue: o.revenue ?? 0,
+        netIncome: o.netIncome ?? 0,
+      })),
+    [overview]
+  );
+  const balanceChartData = useMemo(
+    () =>
+      overview.map((o) => ({
+        year: o.year,
+        assets: o.totalAssets ?? 0,
+        liabilities: o.totalLiabilities ?? 0,
+      })),
+    [overview]
+  );
+  const cashFlowChartData = useMemo(
+    () =>
+      overview.map((o) => ({
+        year: o.year,
+        netChange: o.netChangeInCash ?? 0,
+      })),
+    [overview]
+  );
 
   const selected = overview.find((o) => o.year === selectedYear) ?? null;
-
-  const renderCustomBarLabel = (props: LabelProps) => {
-    const { x, y, width, value } = props;
-    const xPos = typeof x === 'number' ? x : parseFloat(x || '0');
-    const yPos = typeof y === 'number' ? y : parseFloat(y || '0');
-    const barWidth = typeof width === 'number' ? width : parseFloat(width || '0');
-    if (typeof value !== 'number') return null;
-    return (
-      <text
-        x={xPos + barWidth / 2}
-        y={yPos - 6}
-        fill="#FFFFFF"
-        fontSize={15}
-        className="font-bold"
-        textAnchor="middle"
-      >
-        {formatDollars(value)}
-      </text>
-    );
-  };
 
   type CustomTickProps = XAxisProps['tickFormatter'] & {
     x: number;
@@ -189,10 +209,10 @@ export default function OverviewCharts({
                 </div>
               )}
             />
-            <Bar dataKey="revenue" fill="#8884d8" name="Revenue">
+            <Bar dataKey="revenue" fill="#8884d8" name="Revenue" isAnimationActive={animateBars} onAnimationEnd={stopBarAnimation}>
               <LabelList content={renderCustomBarLabel} />
             </Bar>
-            <Bar dataKey="netIncome" fill="#82ca9d" name="Net Income">
+            <Bar dataKey="netIncome" fill="#82ca9d" name="Net Income" isAnimationActive={animateBars} onAnimationEnd={stopBarAnimation}>
               <LabelList content={renderCustomBarLabel} />
             </Bar>
           </BarChart>
@@ -250,10 +270,10 @@ export default function OverviewCharts({
                         </div>
                       )}
                     />
-                    <Bar dataKey="assets" fill="#8884d8" name="Total Assets">
+                    <Bar dataKey="assets" fill="#8884d8" name="Total Assets" isAnimationActive={animateBars} onAnimationEnd={stopBarAnimation}>
                       <LabelList content={renderCustomBarLabel} />
                     </Bar>
-                    <Bar dataKey="liabilities" fill="#82ca9d" name="Total Liabilities">
+                    <Bar dataKey="liabilities" fill="#82ca9d" name="Total Liabilities" isAnimationActive={animateBars} onAnimationEnd={stopBarAnimation}>
                       <LabelList content={renderCustomBarLabel} />
                     </Bar>
                   </BarChart>
@@ -301,7 +321,7 @@ export default function OverviewCharts({
                         </div>
                       )}
                     />
-                    <Bar dataKey="netChange" fill="#8884d8" name="Net Change in Cash">
+                    <Bar dataKey="netChange" fill="#8884d8" name="Net Change in Cash" isAnimationActive={animateBars} onAnimationEnd={stopBarAnimation}>
                       <LabelList content={renderCustomBarLabel} />
                     </Bar>
                   </BarChart>

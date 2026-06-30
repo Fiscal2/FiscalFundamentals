@@ -50,7 +50,7 @@ export function Navbar() {
         <div className="ml-8 flex w-full md:w-1/3">
           <Link
             href="/"
-            prefetch={true}
+            prefetch={false}
             className="mr-5 flex w-full items-center justify-center md:w-auto lg:mr-6"
           >
             <Image src="/castlingFinancialPieces.png" alt="Logo" width={50} height={50} className="rounded h-[50px] w-[50px]" />
@@ -63,6 +63,7 @@ export function Navbar() {
               <li key={item.title}>
                 <Link
                   href={item.path}
+                  prefetch={item.path === '/' ? false : undefined}
                   className="px-3 py-1 rounded-full transition-colors underline-offset-4 hover:bg-white/10"
                 >
                   {item.title}
