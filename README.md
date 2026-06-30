@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Castling Financial — SEC Fundamentals Dashboard
+
+A Next.js (App Router) dashboard for exploring U.S. and foreign-issuer company
+fundamentals sourced directly from SEC XBRL filings. Search a company and view a
+multi-year Overview (revenue, margins, balance sheet, cash flow) and the full
+Income Statement / Balance Sheet / Cash Flow for each filing.
+
+## Stack
+
+- **Next.js 16** (App Router) + **React 19** + **TypeScript**
+- **Tailwind CSS 4**
+- **Recharts** for charts, **Fuse.js** for fuzzy search
+- **Supabase** (Postgres warehouse) read directly from the client via `@supabase/supabase-js`
+
+## Data Accuracy
+
+Every figure in our 2024/2025 data is the exact value the company itself reported to the SEC in its official XBRL filing — not an estimate or a re-derived number. For any data point we can hand you the precise filing (accession number), the exact tag, the period, and the units it came from. We never alter the underlying value, and we use exact decimal math so nothing rounds or drifts. We verify it three independent ways: it ties back bit-for-bit to the SEC's bulk source files, it matches the SEC's separate company-facts API to the penny, and every statement internally reconciles (the balance sheet balances, the cash flow ties out). Yahoo and Google normalize and recompute figures from vendor feeds, which is where transformation errors creep in and why their numbers sometimes disagree with the filing — we carry the filing's own numbers, with a traceable link back to the document.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
+cp .env.example .env   # then fill in your Supabase values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See [`.env.example`](./.env.example). Required:
 
-## Learn More
+- `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL (browser-safe)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon key (browser-safe by design)
 
-To learn more about Next.js, take a look at the following resources:
+`.env` is gitignored and must never be committed.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `npm run dev` — start the dev server
+- `npm run build` — production build
+- `npm run start` — serve the production build
+- `npm run lint` — ESLint
 
-## Deploy on Vercel
+## Architecture
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/lib/warehouse.ts` — Supabase data access + per-session caching. Owns
+  *where rows come from*.
+- `src/lib/xbrl.ts` — pure XBRL interpretation: tag dictionaries and the
+  statement/Overview derivation. No network; unit-testable from row fixtures.
+- `src/lib/company-name.ts` — display-name normalization (EDGAR suffix
+  stripping, casing, entity forms) shared by the header and search.
+- `src/lib/tickers.ts` — bundled SEC ticker ↔ CIK map.
+- `src/components/layout/` — navbar (with search) and footer.
+- `src/app/` — routes only: `page.tsx` (home), `about/`, and `dashboard/`
+  (`page.tsx` + colocated `statements-view.tsx`).

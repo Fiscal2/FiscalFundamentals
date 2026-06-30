@@ -1,0 +1,81 @@
+'use client';
+
+import Link from 'next/link';
+import { Suspense, useEffect, useState } from 'react';
+import MobileMenu from './mobile-menu';
+import Image from 'next/image';
+import StockSearch from './search/stock-search';
+import { StockItem } from '@/lib/types';
+import { getCompanies } from '@/lib/warehouse';
+
+const SITE_NAME_LINE_1 = 'Castling';
+const SITE_NAME_LINE_2 = 'Financial';
+
+const MENU_ITEMS = [
+  { title: 'Home', path: '/' },
+  { title: 'About', path: '/about' },
+  { title: 'Services', path: '/services' },
+  { title: 'Contact', path: '/contact' }
+];
+
+
+export function Navbar() {
+  const [tickers, setTickers] = useState<StockItem[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const list = await getCompanies();
+        if (!cancelled) setTickers(list);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load companies:', err);
+          setLoadError(true);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
+  return (
+    <nav className="relative flex items-center justify-between p-5 lg:px-6">
+      <div className="block flex-none md:hidden">
+        <Suspense fallback={null}>
+          <MobileMenu menu={MENU_ITEMS} />
+        </Suspense>
+      </div>
+      <div className="flex w-full items-center">
+        <div className="ml-8 flex w-full md:w-1/3">
+          <Link
+            href="/"
+            prefetch={true}
+            className="mr-5 flex w-full items-center justify-center md:w-auto lg:mr-6"
+          >
+            <Image src="/castlingFinancialPieces.png" alt="Logo" width={50} height={50} className="rounded h-[50px] w-[50px]" />
+            <div className="ml-2 mr-5 flex-none text-sm font-bold md:hidden lg:block">
+              {SITE_NAME_LINE_1}<br />{SITE_NAME_LINE_2}
+            </div>
+          </Link>
+          <ul className="hidden gap-2 text-sm md:flex md:items-center">
+            {MENU_ITEMS.map((item) => (
+              <li key={item.title}>
+                <Link
+                  href={item.path}
+                  className="px-3 py-1 rounded-full transition-colors underline-offset-4 hover:bg-white/10"
+                >
+                  {item.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="hidden justify-center md:flex md:w-1/3">
+        </div>
+        <div className="flex justify-end md:w-1/3" />
+        <StockSearch allTickers={tickers} onSelect={() => {}} navigateToDashboard loadError={loadError} />
+      </div>
+    </nav>
+  );
+}
