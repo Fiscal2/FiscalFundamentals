@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { cikToTicker } from './tickers';
+import { cikToTicker, loadTickerData } from './tickers';
 import {
   StockItem,
   StatementCode,
@@ -66,7 +66,7 @@ type AnnualQueryRow = LineQueryRow & {
 // requires paging the whole `filing` table. Cache it in localStorage so a page
 // refresh shows the search immediately instead of waiting on ~12 round-trips,
 // and dedupe concurrent callers within a session via a shared in-flight promise.
-const COMPANIES_CACHE_KEY = 'ff:companies:v1';
+const COMPANIES_CACHE_KEY = 'ff:companies:v2';
 const COMPANIES_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 let companiesPromise: Promise<StockItem[]> | null = null;
 
@@ -100,6 +100,10 @@ function writeCompaniesCache(items: StockItem[]): void {
 // ~4x smaller than the `fundamentals` view) and enriched with ticker/exchange
 // from the SEC map.
 async function fetchCompanies(): Promise<StockItem[]> {
+  // Load the ticker map first; the sync cikToTicker() returns null until it's
+  // ready, which would otherwise fall back to showing a CIK as the ticker.
+  await loadTickerData().catch(() => {});
+
   const seen = new Map<number, StockItem>();
   let from = 0;
 
