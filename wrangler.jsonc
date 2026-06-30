@@ -1,13 +1,8 @@
 {
-  // Static-assets-only Worker: `next build` (output: 'export') emits the site to
-  // `out/`, and Cloudflare serves it directly. Having this file present stops
-  // `wrangler deploy` from auto-running the OpenNext server adapter, which is
-  // incompatible with a static export.
   "name": "castling-financial",
   "compatibility_date": "2026-06-30",
   "assets": {
     "directory": "./out",
-    // Serve the exported 404.html on unmatched routes.
     "not_found_handling": "404-page"
   }
 }
