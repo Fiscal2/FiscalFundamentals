@@ -1,11 +1,8 @@
-// Central place for the few details the legal pages reference. Update these to
-// your real values before going live.
+// Details the legal pages reference, kept in one place.
 export const LEGAL = {
   companyName: 'Castling Financial',
-  // The email users should contact for legal/privacy questions.
   contactEmail: 'zacharyross3@gmail.com',
-  // The state/country whose laws govern the Terms (e.g. "the State of Delaware,
-  // United States"). Pick where you operate or are incorporated.
+  // Jurisdiction whose laws govern the Terms.
   governingLaw: 'the State of Michigan, United States',
   // Shown as the "Last updated" date on each policy.
   lastUpdated: 'June 29, 2026',

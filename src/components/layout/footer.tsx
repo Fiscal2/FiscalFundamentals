@@ -1,4 +1,3 @@
-// src/app/components/layout/footer.tsx
 import FooterMenu from './footer-menu';
 import Image from 'next/image';
 import Link from 'next/link';

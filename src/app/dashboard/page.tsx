@@ -1,4 +1,3 @@
-// src/app/dashboard/page.tsx
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
@@ -138,8 +137,10 @@ function Dashboard() {
 
   return (
     <main className="p-8">
-      <h1>{listedExchange.toUpperCase()}</h1>
-      <h1 className="text-2xl font-bold mb-4">{companyName}</h1>
+      {listedExchange && (
+        <p className="text-sm text-gray-400">{listedExchange.toUpperCase()}</p>
+      )}
+      {companyName && <h1 className="text-2xl font-bold mb-4">{companyName}</h1>}
 
       {!tickerParam && (
         <p className="text-gray-500">Search for a company to view its fundamentals.</p>
@@ -169,11 +170,9 @@ function Dashboard() {
       <div className={tickerParam ? 'min-h-[820px]' : ''}>
         {tab === 'statements' && cik != null && <StatementsView cik={cik} />}
 
-        {/* Render the overview heading as soon as the ticker is known (it depends
-            only on the URL, not on the data fetch or the lazy recharts chunk) so
-            it paints right after hydration. This is the LCP element, so keeping
-            it off the chart's critical path lets LCP track FCP instead of the
-            chart mount ~2s later. */}
+        {/* The LCP element. Render it as soon as the ticker is known — not gated
+            on the data fetch or the lazy recharts chunk — so LCP tracks FCP
+            instead of the chart mount. */}
         {tab === 'overview' && tickerParam && !error && (loading || overview.length > 0) && (
           <h2 className="text-xl font-semibold mt-8 mb-2">
             Revenue vs Net Income for {displayTicker}

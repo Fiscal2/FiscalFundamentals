@@ -23,7 +23,7 @@ export default function MobileSearchModal({
   handleKeyDown,
   formatCompanyName,
 }: Props) {
-  // Optional: prevent background scroll
+  // Lock background scroll while the modal is open.
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };

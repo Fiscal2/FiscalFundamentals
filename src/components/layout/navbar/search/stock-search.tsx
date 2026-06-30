@@ -76,7 +76,6 @@ export default function StockSearch({
         </button>
         </div>
 
-        {/* Mobile modal (only when searchOpen is true) */}
         {searchOpen && (
         <MobileSearchModal
             search={search}
@@ -113,7 +112,6 @@ export default function StockSearch({
             </ul>
         )}
 
-        {/* Dropdown for desktop */}
         {filtered.length > 0 && (
             <ul className="absolute z-10 mt-1 w-full rounded-md bg-white shadow-md dark:bg-neutral-900">
             {filtered.slice(0, 5).map(({ ticker, companyName, listedExchange },) => (

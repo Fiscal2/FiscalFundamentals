@@ -99,13 +99,10 @@ export function groupStatements(rows: RawLineItem[]): Statements {
 // --- Overview: per-year metrics derived from the full statements ---
 //
 // `line_item.tag` is the bare XBRL tag (namespace lives in `version`), so we
-// match on namespace-stripped tag names. These mirror the metrics the dashboard
-// surfaces, read off the assembled statements.
-//
-// Each metric lists US-GAAP tags first, then the IFRS (`ifrs-full`) equivalents
-// used by foreign private issuers (20-F filers like Spotify). `line_item.tag` is
-// the bare tag, so we match across taxonomies; US-GAAP is preferred when a
-// filer reports both.
+// match across taxonomies on namespace-stripped names. Each metric lists its
+// US-GAAP tags first, then the IFRS (`ifrs-full`) equivalents used by foreign
+// private issuers (20-F filers like Spotify); US-GAAP wins when a filer reports
+// both.
 const REVENUE_TAGS = [
   'RevenueFromContractWithCustomerExcludingAssessedTax',
   'RevenueFromContractWithCustomerIncludingAssessedTax',
