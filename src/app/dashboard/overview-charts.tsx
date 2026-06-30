@@ -44,12 +44,10 @@ const MetricsTable = ({ rows }: { rows: { label: string; value: number | null; k
 
 export default function OverviewCharts({
   overview,
-  displayTicker,
   selectedYear,
   setSelectedYear,
 }: {
   overview: AnnualOverview[];
-  displayTicker: string;
   selectedYear: number | null;
   setSelectedYear: (year: number) => void;
 }) {
@@ -155,8 +153,7 @@ export default function OverviewCharts({
     : [];
 
   return (
-    <div className="mt-8">
-      <h2 className="text-xl font-semibold mb-2">Revenue vs Net Income for {displayTicker}</h2>
+    <div>
       <div className="w-[95%] mx-auto">
         <ResponsiveContainer width="100%" height={400}>
           <BarChart

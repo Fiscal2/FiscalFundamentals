@@ -163,30 +163,45 @@ function Dashboard() {
         </div>
       )}
 
-      {tab === 'statements' && cik != null && <StatementsView cik={cik} />}
+      {/* Reserve vertical space while a company is loading so the spinner->charts
+          swap doesn't shove the footer down on cold loads (the footer otherwise
+          starts in-viewport and shifting it dominates CLS). */}
+      <div className={tickerParam ? 'min-h-[820px]' : ''}>
+        {tab === 'statements' && cik != null && <StatementsView cik={cik} />}
 
-      {tab === 'overview' && loading && <Spinner className="mt-8 py-20" />}
+        {/* Render the overview heading as soon as the ticker is known (it depends
+            only on the URL, not on the data fetch or the lazy recharts chunk) so
+            it paints right after hydration. This is the LCP element, so keeping
+            it off the chart's critical path lets LCP track FCP instead of the
+            chart mount ~2s later. */}
+        {tab === 'overview' && tickerParam && !error && (loading || overview.length > 0) && (
+          <h2 className="text-xl font-semibold mt-8 mb-2">
+            Revenue vs Net Income for {displayTicker}
+          </h2>
+        )}
 
-      {tab === 'overview' && !loading && error && (
-        <ErrorState
-          message={`Couldn't load data for ${displayTicker}. Check your connection and try again.`}
-          onRetry={() => setReloadKey((k) => k + 1)}
-          className="mt-8 py-20"
-        />
-      )}
+        {tab === 'overview' && loading && <Spinner className="py-20" />}
 
-      {tab === 'overview' && tickerParam && !loading && !error && overview.length === 0 && (
-        <p className="text-gray-500 mt-4">No data available for {displayTicker}.</p>
-      )}
+        {tab === 'overview' && !loading && error && (
+          <ErrorState
+            message={`Couldn't load data for ${displayTicker}. Check your connection and try again.`}
+            onRetry={() => setReloadKey((k) => k + 1)}
+            className="mt-8 py-20"
+          />
+        )}
 
-      {tab === 'overview' && !loading && !error && overview.length > 0 && (
-        <OverviewCharts
-          overview={overview}
-          displayTicker={displayTicker}
-          selectedYear={selectedYear}
-          setSelectedYear={setSelectedYear}
-        />
-      )}
+        {tab === 'overview' && tickerParam && !loading && !error && overview.length === 0 && (
+          <p className="text-gray-500 mt-4">No data available for {displayTicker}.</p>
+        )}
+
+        {tab === 'overview' && !loading && !error && overview.length > 0 && (
+          <OverviewCharts
+            overview={overview}
+            selectedYear={selectedYear}
+            setSelectedYear={setSelectedYear}
+          />
+        )}
+      </div>
     </main>
   );
 }
