@@ -11,11 +11,13 @@ import MobileSearchModal from '../mobile-search-modal';
 export default function StockSearch({
   allTickers,
   onSelect,
-  navigateToDashboard = false
+  navigateToDashboard = false,
+  loadError = false
 }: {
   allTickers: StockItem[];
   onSelect: (ticker: string) => void;
   navigateToDashboard?: boolean;
+  loadError?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const [filtered, setFiltered] = useState<StockItem[]>([]);
@@ -37,7 +39,6 @@ export default function StockSearch({
     }
 
     const results = fuse.search(search.trim());
-    console.log(results)
     setFiltered(results.map(r => r.item));
   }, [search, fuse]);
 
@@ -101,6 +102,16 @@ export default function StockSearch({
             onChange={(e) => setSearch(e.target.value)}
             />
         </div>
+
+        {/* Company list failed to load — tell the user instead of silently
+            returning no matches. */}
+        {loadError && search.trim() !== '' && filtered.length === 0 && (
+            <ul className="absolute z-10 mt-1 w-full rounded-md bg-white shadow-md dark:bg-neutral-900">
+            <li className="px-4 py-2 text-sm text-gray-500">
+                Search is temporarily unavailable.
+            </li>
+            </ul>
+        )}
 
         {/* Dropdown for desktop */}
         {filtered.length > 0 && (

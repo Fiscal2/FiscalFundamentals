@@ -1,16 +1,48 @@
-// SEC ticker <-> CIK mapping, bundled from data/company_tickers_exchange.json
+// SEC ticker <-> CIK mapping, sourced from data/company_tickers_exchange.json
 // (https://www.sec.gov/files/company_tickers_exchange.json). Lets the
 // ticker-based search/URLs work against the warehouse, which is keyed by CIK.
-import rawData from './data/company_tickers_exchange.json';
+//
+// The JSON is ~500 KB, so it is pulled in with a dynamic import() — its own lazy
+// chunk — instead of being statically bundled into every route's initial load.
+// Callers either `await loadTickerData()` (and gate on `tickerDataReady()`) or
+// use the sync accessors, which return null until the data has loaded and kick
+// off the load in the background.
 
 // Each row is [cik, name, ticker, exchange].
 type TickerRow = [number, string, string, string | null];
-const rows = (rawData as unknown as { fields: string[]; data: TickerRow[] }).data;
 
 export type TickerInfo = { ticker: string; exchange: string | null; name: string };
 
+let rows: TickerRow[] = [];
 let tickerToCikMap: Map<string, number> | null = null;
 let cikToInfoMap: Map<number, TickerInfo> | null = null;
+let tokenCaseMap: Map<string, string> | null = null;
+let loadPromise: Promise<void> | null = null;
+
+/**
+ * Load and index the SEC ticker dataset (memoized). Resolves once the maps are
+ * built; safe to call repeatedly. Resets on failure so a later call can retry.
+ */
+export function loadTickerData(): Promise<void> {
+  if (!loadPromise) {
+    loadPromise = import('./data/company_tickers_exchange.json')
+      .then((mod) => {
+        rows = (mod.default as unknown as { fields: string[]; data: TickerRow[] }).data;
+        build();
+        buildTokenCase();
+      })
+      .catch((err) => {
+        loadPromise = null;
+        throw err;
+      });
+  }
+  return loadPromise;
+}
+
+/** Whether the ticker maps have finished loading and are ready to query. */
+export function tickerDataReady(): boolean {
+  return cikToInfoMap != null;
+}
 
 function build() {
   tickerToCikMap = new Map();
@@ -28,13 +60,19 @@ function build() {
 }
 
 export function tickerToCik(ticker: string): number | null {
-  if (!tickerToCikMap) build();
-  return tickerToCikMap!.get(ticker.trim().toUpperCase()) ?? null;
+  if (!tickerToCikMap) {
+    void loadTickerData();
+    return null;
+  }
+  return tickerToCikMap.get(ticker.trim().toUpperCase()) ?? null;
 }
 
 export function cikToTicker(cik: number): TickerInfo | null {
-  if (!cikToInfoMap) build();
-  return cikToInfoMap!.get(Number(cik)) ?? null;
+  if (!cikToInfoMap) {
+    void loadTickerData();
+    return null;
+  }
+  return cikToInfoMap.get(Number(cik)) ?? null;
 }
 
 // --- Proper-casing for stylized (camelCase) company names ---
@@ -47,8 +85,6 @@ export function cikToTicker(cik: number): TickerInfo | null {
 // "iMAGE", "AIxCrypto") so ordinary words are never mangled.
 const CLEAN_CAMEL = /^[A-Za-z][a-z]*([A-Z][a-z]+)+$/;
 const stripEnds = (w: string) => w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9.&]+$/g, '');
-
-let tokenCaseMap: Map<string, string> | null = null;
 
 function buildTokenCase() {
   const formCounts = new Map<string, Map<string, number>>();
@@ -87,7 +123,10 @@ function buildTokenCase() {
  * "BlackRock") if the SEC ticker data knows one, else null.
  */
 export function properCaseToken(word: string): string | null {
-  if (!tokenCaseMap) buildTokenCase();
+  if (!tokenCaseMap) {
+    void loadTickerData();
+    return null;
+  }
   const key = stripEnds(word).toLowerCase();
-  return tokenCaseMap!.get(key) ?? null;
+  return tokenCaseMap.get(key) ?? null;
 }

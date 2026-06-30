@@ -20,6 +20,46 @@ import {
 
 const PAGE_SIZE = 1000;
 
+// PostgREST caps every response at a fixed number of rows (1000 by default), and
+// it does so silently — no error. Any query that can exceed that must page with
+// `.range()` or it will quietly drop data. This pages until a short page comes
+// back. `buildPage` must apply a deterministic (total) ordering so rows don't
+// shift between page requests.
+async function fetchAllRows<T>(
+  buildPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildPage(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE_SIZE) break;
+  }
+  return all;
+}
+
+// Shapes of the raw rows returned by the line-item queries below, before xbrl
+// normalization. Columns can arrive as strings (numeric(28,4)) so widen those.
+type LineQueryRow = {
+  stmt: string;
+  line: number | string;
+  plabel: string | null;
+  tag: string;
+  value: number | string | null;
+  uom: string;
+  qtrs: number | string;
+  ddate: string;
+};
+type AnnualQueryRow = LineQueryRow & {
+  adsh: string;
+  form: string;
+  period: string | null;
+  fy: number | null;
+  fp: string | null;
+  filed: string | null;
+};
+
 // --- Company search list ---
 
 // The search list rarely changes (only when a new quarter is ingested), but it
@@ -155,16 +195,16 @@ export async function getFilings(cik: number): Promise<FilingMeta[]> {
   const existing = filingsInflight.get(cik);
   if (existing) return existing;
 
-  const p = (async () => {
-    const { data, error } = await supabase
+  const p = fetchAllRows<FilingMeta>((from, to) =>
+    supabase
       .from('filing')
       .select('adsh, form, period, fy, fp, filed')
       .eq('cik', cik)
       .order('period', { ascending: false, nullsFirst: false })
-      .order('filed', { ascending: false });
-    if (error) throw error;
-    return (data ?? []) as FilingMeta[];
-  })();
+      .order('filed', { ascending: false })
+      .order('adsh', { ascending: true })
+      .range(from, to)
+  );
 
   filingsInflight.set(cik, p);
   try {
@@ -189,17 +229,21 @@ async function fetchLineItems(adsh: string): Promise<RawLineItem[]> {
   if (existing) return existing;
 
   const p = (async () => {
-    const { data, error } = await supabase
-      .from('line_item')
-      .select('stmt, line, plabel, tag, value, uom, qtrs, ddate')
-      .eq('adsh', adsh)
-      .in('stmt', STATEMENT_CODES)
-      .order('line')
-      .order('ddate');
+    const data = await fetchAllRows<LineQueryRow>((from, to) =>
+      supabase
+        .from('line_item')
+        .select('stmt, line, plabel, tag, value, uom, qtrs, ddate')
+        .eq('adsh', adsh)
+        .in('stmt', STATEMENT_CODES)
+        .order('line')
+        .order('ddate')
+        .order('tag')
+        .order('uom')
+        .order('qtrs')
+        .range(from, to)
+    );
 
-    if (error) throw error;
-
-    return (data ?? []).map((raw) => ({
+    return data.map((raw) => ({
       line: Number(raw.line),
       plabel: raw.plabel ?? null,
       tag: raw.tag,
@@ -264,16 +308,22 @@ export async function getAnnualOverview(cik: number): Promise<AnnualOverview[]> 
   // annual view only carries annual forms, so the picker still needs this.
   void getFilings(cik).catch(() => {});
 
-  const { data, error } = await supabase
-    .from('annual_line_items')
-    .select('adsh, form, period, fy, fp, filed, stmt, line, plabel, tag, value, uom, qtrs, ddate')
-    .eq('cik', cik)
-    .in('stmt', STATEMENT_CODES)
-    .order('line')
-    .order('ddate');
+  const data = await fetchAllRows<AnnualQueryRow>((from, to) =>
+    supabase
+      .from('annual_line_items')
+      .select('adsh, form, period, fy, fp, filed, stmt, line, plabel, tag, value, uom, qtrs, ddate')
+      .eq('cik', cik)
+      .in('stmt', STATEMENT_CODES)
+      .order('line')
+      .order('ddate')
+      .order('adsh')
+      .order('tag')
+      .order('uom')
+      .order('qtrs')
+      .range(from, to)
+  );
 
-  if (error) throw error;
-  if (!data || data.length === 0) return [];
+  if (data.length === 0) return [];
 
   // Group the flat result back into one bundle per filing.
   const byAdsh = new Map<string, { filing: FilingMeta; rows: RawLineItem[] }>();

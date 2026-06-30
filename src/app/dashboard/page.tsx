@@ -6,9 +6,10 @@ import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { getAnnualOverview, getCompanyName } from '@/lib/warehouse';
 import { AnnualOverview } from '@/lib/types';
-import { tickerToCik, cikToTicker } from '@/lib/tickers';
+import { tickerToCik, cikToTicker, loadTickerData } from '@/lib/tickers';
 import { formatCompanyName } from '@/lib/company-name';
 import { Spinner } from '@/components/spinner';
+import { ErrorState } from '@/components/error-state';
 
 // Recharts (~heavy) and the Statements tab are only needed conditionally, so
 // keep them out of the initial route bundle and load them on demand.
@@ -35,24 +36,50 @@ const resolveCik = (raw: string | null): number | null => {
 function Dashboard() {
   const searchParams = useSearchParams();
   const tickerParam = searchParams.get('ticker');
-  const cik = resolveCik(tickerParam);
+
+  // The ticker->CIK map loads lazily (see tickers.ts). Always start "not ready"
+  // so the server's first render and the client's first render agree: the map is
+  // a module singleton that can be warm on the server but is always cold on a
+  // fresh client, so reading it during render would cause a hydration mismatch.
+  // The client-only effect flips it on, then we resolve the ticker.
+  const [tickerReady, setTickerReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    loadTickerData()
+      .then(() => { if (!cancelled) setTickerReady(true); })
+      .catch(() => { if (!cancelled) setTickerReady(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Resolve only once the map is ready so all derived display values (exchange,
+  // company name, tabs) are identical on the first server/client paint.
+  const cik = tickerReady ? resolveCik(tickerParam) : null;
+  const resolving = tickerParam != null && cik == null && !tickerReady;
 
   const [overview, setOverview] = useState<AnnualOverview[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  // Start in the loading state when we already have a company to fetch, so the
-  // first paint shows the spinner instead of a flash of "No data available".
-  const [loading, setLoading] = useState(cik != null);
+  // Start in the loading state when there's a company in the URL to fetch, so
+  // the first paint shows the spinner instead of a flash of "No data available"
+  // (covers the window while the ticker map is still resolving the CIK).
+  const [loading, setLoading] = useState(tickerParam != null);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<'overview' | 'statements'>('overview');
   const [warehouseName, setWarehouseName] = useState<string | null>(null);
 
   useEffect(() => {
     if (cik == null) {
+      // Still resolving ticker->CIK: keep showing the spinner, don't fall
+      // through to the empty/"no data" state yet.
+      if (resolving) return;
       setOverview([]);
       setLoading(false);
+      setError(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setError(false);
     (async () => {
       try {
         const rows = await getAnnualOverview(cik);
@@ -61,13 +88,14 @@ function Dashboard() {
         if (!cancelled) {
           console.error('Failed to fetch overview:', err);
           setOverview([]);
+          setError(true);
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [cik]);
+  }, [cik, reloadKey, resolving]);
 
   useEffect(() => {
     if (overview.length === 0) {
@@ -101,7 +129,7 @@ function Dashboard() {
       }
     })();
     return () => { cancelled = true; };
-  }, [cik]);
+  }, [cik, reloadKey]);
 
   const info = cik != null ? cikToTicker(cik) : null;
   const displayTicker = (info?.ticker ?? tickerParam ?? '').toUpperCase();
@@ -139,11 +167,19 @@ function Dashboard() {
 
       {tab === 'overview' && loading && <Spinner className="mt-8 py-20" />}
 
-      {tab === 'overview' && tickerParam && !loading && overview.length === 0 && (
+      {tab === 'overview' && !loading && error && (
+        <ErrorState
+          message={`Couldn't load data for ${displayTicker}. Check your connection and try again.`}
+          onRetry={() => setReloadKey((k) => k + 1)}
+          className="mt-8 py-20"
+        />
+      )}
+
+      {tab === 'overview' && tickerParam && !loading && !error && overview.length === 0 && (
         <p className="text-gray-500 mt-4">No data available for {displayTicker}.</p>
       )}
 
-      {tab === 'overview' && !loading && overview.length > 0 && (
+      {tab === 'overview' && !loading && !error && overview.length > 0 && (
         <OverviewCharts
           overview={overview}
           displayTicker={displayTicker}

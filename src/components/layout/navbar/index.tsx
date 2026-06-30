@@ -21,6 +21,7 @@ const MENU_ITEMS = [
 
 export function Navbar() {
   const [tickers, setTickers] = useState<StockItem[]>([]);
+  const [loadError, setLoadError] = useState(false);
   useEffect(() => {
     let cancelled = false;
 
@@ -29,7 +30,10 @@ export function Navbar() {
         const list = await getCompanies();
         if (!cancelled) setTickers(list);
       } catch (err) {
-        if (!cancelled) console.error('Failed to load companies:', err);
+        if (!cancelled) {
+          console.error('Failed to load companies:', err);
+          setLoadError(true);
+        }
       }
     })();
 
@@ -70,7 +74,7 @@ export function Navbar() {
         <div className="hidden justify-center md:flex md:w-1/3">
         </div>
         <div className="flex justify-end md:w-1/3" />
-        <StockSearch allTickers={tickers} onSelect={() => {}} navigateToDashboard />
+        <StockSearch allTickers={tickers} onSelect={() => {}} navigateToDashboard loadError={loadError} />
       </div>
     </nav>
   );

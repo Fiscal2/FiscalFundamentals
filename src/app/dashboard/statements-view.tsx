@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getFilings, getStatements, peekFilings, peekStatements } from '@/lib/warehouse';
 import { Spinner } from '@/components/spinner';
+import { ErrorState } from '@/components/error-state';
 import {
   FilingMeta,
   LineItemRow,
@@ -102,9 +103,12 @@ export default function StatementsView({ cik }: { cik: number }) {
     return cached ? peekStatements(defaultAdsh(cached)) : null;
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setError(false);
     // Cache hit: resolve synchronously, no spinner, no round trip. Seed the
     // statements from cache too so we never flash the previous company's
     // numbers under the new header while the statements effect catches up.
@@ -136,13 +140,14 @@ export default function StatementsView({ cik }: { cik: number }) {
           console.error('Failed to fetch filings:', err);
           setFilings([]);
           setSelectedAdsh('');
+          setError(true);
         }
       } finally {
         if (!cancelled) setFilingsLoaded(true);
       }
     })();
     return () => { cancelled = true; };
-  }, [cik]);
+  }, [cik, reloadKey]);
 
   useEffect(() => {
     if (!selectedAdsh) {
@@ -167,18 +172,32 @@ export default function StatementsView({ cik }: { cik: number }) {
         if (!cancelled) {
           console.error('Failed to fetch statements:', err);
           setStatements(null);
+          setError(true);
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedAdsh]);
+  }, [selectedAdsh, reloadKey]);
 
   const periodEnd = useMemo(
     () => filings.find((f) => f.adsh === selectedAdsh)?.period ?? null,
     [filings, selectedAdsh]
   );
+
+  if (error) {
+    return (
+      <ErrorState
+        message="Couldn't load financial statements. Check your connection and try again."
+        onRetry={() => {
+          setError(false);
+          setReloadKey((k) => k + 1);
+        }}
+        className="mt-8 py-20"
+      />
+    );
+  }
 
   if (!filingsLoaded) {
     return <Spinner className="mt-8 py-20" />;
