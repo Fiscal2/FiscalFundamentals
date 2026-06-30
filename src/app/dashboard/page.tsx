@@ -12,7 +12,8 @@ import { Spinner } from '@/components/spinner';
 
 // Recharts (~heavy) and the Statements tab are only needed conditionally, so
 // keep them out of the initial route bundle and load them on demand.
-const OverviewCharts = dynamic(() => import('./overview-charts'), {
+const importOverviewCharts = () => import('./overview-charts');
+const OverviewCharts = dynamic(importOverviewCharts, {
   ssr: false,
   loading: () => <Spinner className="mt-8 py-20" />,
 });
@@ -75,6 +76,12 @@ function Dashboard() {
     }
     setSelectedYear(Math.max(...overview.map((o) => o.year)));
   }, [overview]);
+
+  // Prefetch the heavy recharts chunk alongside the data fetch so its cold
+  // download/parse overlaps the round trip instead of stacking after it.
+  useEffect(() => {
+    if (cik != null) void importOverviewCharts();
+  }, [cik]);
 
   useEffect(() => {
     if (cik == null) {

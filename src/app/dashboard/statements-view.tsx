@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getFilings, getStatements } from '@/lib/warehouse';
+import { getFilings, getStatements, peekFilings, peekStatements } from '@/lib/warehouse';
 import { Spinner } from '@/components/spinner';
 import {
   FilingMeta,
@@ -39,6 +39,12 @@ function filingLabel(f: FilingMeta): string {
   if (f.fp || f.fy) parts.push([f.fp, f.fy].filter(Boolean).join(' '));
   const period = f.period ?? f.filed ?? '';
   return `${parts.join(' ')}${period ? ` — ${period}` : ''}`;
+}
+
+// Default selection: the most recent 10-K, falling back to the newest filing of
+// any kind (filings arrive newest-first), matching the picker's prior behavior.
+function defaultAdsh(list: FilingMeta[]): string {
+  return (list.find((f) => f.form === '10-K') ?? list[0])?.adsh ?? '';
 }
 
 function StatementTable({
@@ -82,22 +88,49 @@ function StatementTable({
 }
 
 export default function StatementsView({ cik }: { cik: number }) {
-  const [filings, setFilings] = useState<FilingMeta[]>([]);
-  const [filingsLoaded, setFilingsLoaded] = useState(false);
-  const [selectedAdsh, setSelectedAdsh] = useState<string>('');
-  const [statements, setStatements] = useState<Statements | null>(null);
+  // Initialize straight from the Overview-warmed cache when possible, so an
+  // already-loaded company paints its filings/statements on the first render
+  // with no spinner. A cache miss starts empty and the effects below fetch.
+  const [filings, setFilings] = useState<FilingMeta[]>(() => peekFilings(cik) ?? []);
+  const [filingsLoaded, setFilingsLoaded] = useState<boolean>(() => peekFilings(cik) != null);
+  const [selectedAdsh, setSelectedAdsh] = useState<string>(() => {
+    const cached = peekFilings(cik);
+    return cached ? defaultAdsh(cached) : '';
+  });
+  const [statements, setStatements] = useState<Statements | null>(() => {
+    const cached = peekFilings(cik);
+    return cached ? peekStatements(defaultAdsh(cached)) : null;
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    // Cache hit: resolve synchronously, no spinner, no round trip. Seed the
+    // statements from cache too so we never flash the previous company's
+    // numbers under the new header while the statements effect catches up.
+    const cached = peekFilings(cik);
+    if (cached) {
+      const adsh = defaultAdsh(cached);
+      const cachedStatements = peekStatements(adsh);
+      setFilings(cached);
+      setSelectedAdsh(adsh);
+      setFilingsLoaded(true);
+      setStatements(cachedStatements);
+      setLoading(cachedStatements == null);
+      return;
+    }
+    // Cold company: clear the prior statements and enter loading up front, so
+    // the switch shows one continuous spinner instead of briefly painting the
+    // old company's numbers before the statements effect catches up.
     setFilingsLoaded(false);
+    setStatements(null);
+    setLoading(true);
     (async () => {
       try {
         const list = await getFilings(cik);
         if (cancelled) return;
         setFilings(list);
-        const latest10K = list.find((f) => f.form === '10-K') ?? list[0];
-        setSelectedAdsh(latest10K?.adsh ?? '');
+        setSelectedAdsh(defaultAdsh(list));
       } catch (err) {
         if (!cancelled) {
           console.error('Failed to fetch filings:', err);
@@ -117,6 +150,14 @@ export default function StatementsView({ cik }: { cik: number }) {
       return;
     }
     let cancelled = false;
+    // Cache hit (e.g. annual filings the Overview already loaded): render
+    // instantly without flipping into the loading state.
+    const cached = peekStatements(selectedAdsh);
+    if (cached) {
+      setStatements(cached);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     (async () => {
       try {

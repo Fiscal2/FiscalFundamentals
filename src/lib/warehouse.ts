@@ -234,6 +234,21 @@ export async function getStatements(adsh: string): Promise<Statements> {
 }
 
 /**
+ * Synchronous cache peeks for the Statements tab. The Overview prewarms the
+ * filings list and annual line items, so a switch to Statements can usually
+ * paint on the first render. Returns null on a miss; the caller then falls back
+ * to the async `getFilings` / `getStatements` path.
+ */
+export function peekFilings(cik: number): FilingMeta[] | null {
+  return filingsCache.get(cik) ?? null;
+}
+
+export function peekStatements(adsh: string): Statements | null {
+  const rows = lineItemsCache.get(adsh);
+  return rows ? groupStatements(rows) : null;
+}
+
+/**
  * Per-year Overview metrics for a company, one row per annual filing,
  * reconstructed from each filing's statements. Sorted oldest -> newest.
  *
