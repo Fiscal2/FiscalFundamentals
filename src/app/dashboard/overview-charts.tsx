@@ -118,9 +118,9 @@ export default function OverviewCharts({
   const CustomXAxisTick = ({ x, y, payload, onClick }: CustomTickProps) => {
     const year = payload.value;
     const isSelected = selectedYear === year;
-    const width = 50;
+    const label = String(year);
+    const width = Math.max(44, label.length * 11 + 10);
     const height = 30;
-    const textYOffset = 22;
     return (
       <g transform={`translate(${x}, ${y})`} onClick={() => onClick(year)} style={{ cursor: 'pointer' }}>
         {isSelected && (
@@ -128,13 +128,15 @@ export default function OverviewCharts({
         )}
         <text
           x={0}
-          y={textYOffset}
+          y={height / 2}
+          dy={2}
           textAnchor="middle"
+          dominantBaseline="middle"
           fill={isSelected ? '#fff' : '#D3D3D3'}
           fontSize={18}
           fontWeight={isSelected ? 'bold' : 'normal'}
         >
-          {year}
+          {label}
         </text>
       </g>
     );
