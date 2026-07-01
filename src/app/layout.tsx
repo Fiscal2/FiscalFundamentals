@@ -14,9 +14,36 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "Castling Financial",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Castling Financial",
+    template: "%s | Castling Financial",
+  },
   description: "Always two steps ahead.",
+  openGraph: {
+    title: "Castling Financial",
+    description: "Always two steps ahead.",
+    siteName: "Castling Financial",
+    type: "website",
+    locale: "en_US",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Castling Financial — Company financials from official SEC filings",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Castling Financial",
+    description: "Always two steps ahead.",
+    images: ["/og-image.png"],
+  },
   icons: {
     icon: "/favicon.ico",
     apple: "/apple-touch-icon.png",
