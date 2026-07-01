@@ -18,7 +18,11 @@ export const metadata: Metadata = {
   title: "Castling Financial",
   description: "Always two steps ahead.",
   icons: {
-    icon: "/favicon.ico", 
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    title: "CastlingFinancial",
   },
 };
 
