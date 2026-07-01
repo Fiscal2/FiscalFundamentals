@@ -9,6 +9,7 @@ import { tickerToCik, cikToTicker, loadTickerData } from '@/lib/tickers';
 import { formatCompanyName } from '@/lib/company-name';
 import { Spinner } from '@/components/spinner';
 import { ErrorState } from '@/components/error-state';
+import FeaturedCompanies from './featured-companies';
 
 // Recharts (~heavy) and the Statements tab are only needed conditionally, so
 // keep them out of the initial route bundle and load them on demand.
@@ -143,7 +144,7 @@ function Dashboard() {
       {companyName && <h1 className="text-2xl font-bold mb-4">{companyName}</h1>}
 
       {!tickerParam && (
-        <p className="text-gray-500">Search for a company to view its fundamentals.</p>
+        <FeaturedCompanies ready={tickerReady} />
       )}
 
       {tickerParam && cik != null && (
