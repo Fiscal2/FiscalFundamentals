@@ -129,6 +129,7 @@ const NET_INCOME_TAGS = [
 const EPS_TAGS = [
   'EarningsPerShareBasic',
   'EarningsPerShareBasicAndDiluted',
+  'EarningsPerShareDiluted',
   'IncomeLossFromContinuingOperationsPerBasicShare',
   // IFRS
   'BasicEarningsLossPerShare',
@@ -153,6 +154,8 @@ const OPEX_TOTAL_TAGS = [
   'CostsAndExpenses',
   'OperatingCostsAndExpenses',
   'NoninterestExpense',
+  'MarketingAdministrationAndResearchCosts',
+  'OtherCostOfOperatingRevenue',
   // IFRS
   'OperatingExpense',
 ];
@@ -179,6 +182,7 @@ const EQUITY_TAGS = [
   'Equity',
   'EquityAttributableToOwnersOfParent',
 ];
+const EQUITY_BEFORE_TREASURY_TAG = 'StockholdersEquityBeforeTreasuryStock';
 const PREFERRED_EQUITY_TAGS = ['PreferredStockValue'];
 const COMPREHENSIVE_CASH_TAG = 'CashCashEquivalentsAndShortTermInvestments';
 const CASH_TAGS = [
@@ -201,15 +205,15 @@ const STI_TAGS = [
 ];
 const SHARES_OUTSTANDING_TAGS = [
   'CommonStockSharesOutstanding',
-  'CommonStockSharesIssued',
   'WeightedAverageNumberOfSharesOutstandingBasic',
   'WeightedAverageNumberOfDilutedSharesOutstanding',
   // IFRS
   'NumberOfSharesOutstanding',
-  'NumberOfSharesIssued',
   'WeightedAverageShares',
   'AdjustedWeightedAverageShares',
 ];
+const SHARES_ISSUED_TAGS = ['CommonStockSharesIssued', 'NumberOfSharesIssued'];
+const TREASURY_SHARES_TAGS = ['TreasuryStockCommonShares', 'TreasuryStockShares'];
 
 const OPERATING_CF_TAGS = [
   'NetCashProvidedByUsedInOperatingActivities',
@@ -259,7 +263,7 @@ const CAPEX_PROCEEDS_TAGS = [
 ];
 
 // Build a tag -> value map for rows passing `keep` (lowest line wins).
-function buildTagMap(rows: RawLineItem[], keep: (r: RawLineItem) => boolean): Map<string, number> {
+function buildTagMap(rows: OverviewRow[], keep: (r: OverviewRow) => boolean): Map<string, number> {
   const m = new Map<string, number>();
   for (const r of rows) {
     if (r.value === null || !keep(r)) continue;
@@ -274,6 +278,37 @@ function pickTag(m: Map<string, number>, tags: string[]): number | null {
     if (typeof v === 'number') return v;
   }
   return null;
+}
+
+export type OverviewRow = LineItemRow & { stmt: string };
+
+function pickEquity(bs: Map<string, number>, eq: Map<string, number>): number | null {
+  let equity = pickTag(bs, EQUITY_TAGS) ?? pickTag(eq, EQUITY_TAGS);
+  if (equity !== null && equity < 0) {
+    const beforeTreasury =
+      pickTag(bs, [EQUITY_BEFORE_TREASURY_TAG]) ?? pickTag(eq, [EQUITY_BEFORE_TREASURY_TAG]);
+    if (beforeTreasury !== null) equity = beforeTreasury;
+  }
+  return equity;
+}
+
+function pickShareCount(
+  bs: Map<string, number>,
+  is: Map<string, number>,
+  netIncome: number | null,
+  eps: number | null
+): number | null {
+  let shares = pickTag(bs, SHARES_OUTSTANDING_TAGS) ?? pickTag(is, SHARES_OUTSTANDING_TAGS);
+  if (shares === null || shares <= 0) {
+    const issued = pickTag(bs, SHARES_ISSUED_TAGS) ?? pickTag(is, SHARES_ISSUED_TAGS);
+    const treasury = pickTag(bs, TREASURY_SHARES_TAGS);
+    if (issued !== null && treasury !== null && issued > treasury) shares = issued - treasury;
+    else if (issued !== null && treasury === null) shares = issued;
+  }
+  if ((shares === null || shares <= 0) && netIncome !== null && eps !== null && eps !== 0) {
+    shares = netIncome / eps;
+  }
+  return shares !== null && shares > 0 ? shares : null;
 }
 
 function sumTags(m: Map<string, number>, tags: string[]): number | null {
@@ -330,12 +365,13 @@ export function mergeCanonicalFacts(
  * filing's full statement rows. Pure: hand it the filing meta and its rows.
  * Returns null when the fiscal year can't be determined.
  */
-export function buildAnnualOverview(filing: FilingMeta, rows: RawLineItem[]): AnnualOverview | null {
-  const year = resolveFactYear(rows);
+export function buildAnnualOverview(filing: FilingMeta, rows: OverviewRow[]): AnnualOverview | null {
+  const year = resolveFactYear(rows as RawLineItem[]);
   if (year === null) return null;
 
   const is = buildTagMap(rows, (r) => r.stmt === 'IS' && r.qtrs === 4);
   const bs = buildTagMap(rows, (r) => r.stmt === 'BS' && r.qtrs === 0);
+  const eq = buildTagMap(rows, (r) => r.stmt === 'EQ' && r.qtrs === 0);
   const cf = buildTagMap(rows, (r) => r.stmt === 'CF' && r.qtrs === 4);
 
   const revenue = pickTag(is, REVENUE_TAGS);
@@ -355,7 +391,7 @@ export function buildAnnualOverview(filing: FilingMeta, rows: RawLineItem[]): An
       : null;
 
   const totalAssets = pickTag(bs, ASSETS_TAGS);
-  let totalEquity = pickTag(bs, EQUITY_TAGS);
+  let totalEquity = pickEquity(bs, eq);
   const explicitLiabilities = pickTag(bs, LIABILITIES_TAGS);
 
   if (totalEquity === null && totalAssets !== null && explicitLiabilities !== null) {
@@ -373,14 +409,7 @@ export function buildAnnualOverview(filing: FilingMeta, rows: RawLineItem[]): An
   const cashAndShortTermInvestments = pickTag(bs, CASH_TAGS) === null && sti === 0 ? null : cash + sti;
 
   const preferredEquity = pickTag(bs, PREFERRED_EQUITY_TAGS) ?? 0;
-  let sharesOutstanding = pickTag(bs, SHARES_OUTSTANDING_TAGS) ?? pickTag(is, SHARES_OUTSTANDING_TAGS);
-  // Fallback when no explicit share count is tagged on the statements (common
-  // for IFRS filers like SAP, which report only NumberOfSharesIssued outside the
-  // statement linkbase): infer the basic weighted-average count from net income
-  // and basic EPS so book value per share can still be shown.
-  if ((sharesOutstanding === null || sharesOutstanding <= 0) && netIncome !== null && eps !== null && eps !== 0) {
-    sharesOutstanding = netIncome / eps;
-  }
+  const sharesOutstanding = pickShareCount(bs, is, netIncome, eps);
   const bookValuePerShare =
     totalEquity !== null && sharesOutstanding !== null && sharesOutstanding > 0
       ? (totalEquity - preferredEquity) / sharesOutstanding

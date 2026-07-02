@@ -14,11 +14,14 @@ import {
   buildAnnualOverview,
   mergeCanonicalFacts,
 } from './xbrl';
+import type { OverviewRow } from './xbrl';
 import { CanonicalField, CanonicalYearFacts } from './types';
 
 // Data access for the SEC fundamentals warehouse. This module owns *where rows
 // come from* (Supabase queries + per-session caching); turning rows into
 // statements and metrics lives in the pure `./xbrl` module.
+
+const OVERVIEW_STMT_CODES = [...STATEMENT_CODES, 'EQ'] as const;
 
 const PAGE_SIZE = 1000;
 
@@ -369,7 +372,7 @@ export async function getAnnualOverview(cik: number): Promise<AnnualOverview[]> 
         .from('annual_line_items')
         .select('adsh, form, period, fy, fp, filed, stmt, line, plabel, tag, value, uom, qtrs, ddate')
         .eq('cik', cik)
-        .in('stmt', STATEMENT_CODES)
+        .in('stmt', [...OVERVIEW_STMT_CODES])
         .order('line')
         .order('ddate')
         .order('adsh')
@@ -384,7 +387,7 @@ export async function getAnnualOverview(cik: number): Promise<AnnualOverview[]> 
   if (data.length === 0) return [];
 
   // Group the flat result back into one bundle per filing.
-  const byAdsh = new Map<string, { filing: FilingMeta; rows: RawLineItem[] }>();
+  const byAdsh = new Map<string, { filing: FilingMeta; rows: OverviewRow[] }>();
   for (const raw of data) {
     const adsh = String(raw.adsh);
     let entry = byAdsh.get(adsh);
@@ -411,7 +414,7 @@ export async function getAnnualOverview(cik: number): Promise<AnnualOverview[]> 
       uom: raw.uom,
       qtrs: Number(raw.qtrs),
       ddate: String(raw.ddate),
-      stmt: raw.stmt as StatementCode,
+      stmt: String(raw.stmt),
     });
   }
 
@@ -425,8 +428,10 @@ export async function getAnnualOverview(cik: number): Promise<AnnualOverview[]> 
 
   const byYear = new Map<number, AnnualOverview>();
   for (const { filing, rows } of entries) {
-    // Warm the Statements-tab cache for this filing.
-    if (!lineItemsCache.has(filing.adsh)) lineItemsCache.set(filing.adsh, rows);
+    const statementRows = rows.filter((r): r is RawLineItem =>
+      STATEMENT_CODES.includes(r.stmt as (typeof STATEMENT_CODES)[number])
+    );
+    if (!lineItemsCache.has(filing.adsh)) lineItemsCache.set(filing.adsh, statementRows);
     const o = buildAnnualOverview(filing, rows);
     if (!o) continue;
     const merged = mergeCanonicalFacts(o, canonicalByYear.get(o.year));
