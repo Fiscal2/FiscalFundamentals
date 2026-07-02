@@ -12,7 +12,9 @@ import {
   STATEMENT_CODES,
   groupStatements,
   buildAnnualOverview,
+  mergeCanonicalFacts,
 } from './xbrl';
+import { CanonicalField, CanonicalYearFacts } from './types';
 
 // Data access for the SEC fundamentals warehouse. This module owns *where rows
 // come from* (Supabase queries + per-session caching); turning rows into
@@ -59,6 +61,60 @@ type AnnualQueryRow = LineQueryRow & {
   fp: string | null;
   filed: string | null;
 };
+
+type FundamentalRow = {
+  field: string;
+  ddate: string;
+  value: number | string | null;
+  qtrs: number | string;
+};
+
+const CANONICAL_FIELDS: CanonicalField[] = [
+  'revenue',
+  'operating_expenses',
+  'net_income',
+  'total_assets',
+  'operating_cash_flow',
+];
+
+function yearFromFundamentalRow(row: FundamentalRow): number | null {
+  const year = parseInt(String(row.ddate).slice(0, 4), 10);
+  return Number.isNaN(year) ? null : year;
+}
+
+/** Canonical KPIs keyed by fact year — CIK-scoped, latest restatement already resolved. */
+async function fetchCanonicalByYear(cik: number): Promise<Map<number, CanonicalYearFacts>> {
+  const data = await fetchAllRows<FundamentalRow>((from, to) =>
+    supabase
+      .from('fundamentals')
+      .select('field, ddate, value, qtrs')
+      .eq('cik', cik)
+      .in('field', CANONICAL_FIELDS)
+      .in('qtrs', [0, 4])
+      .order('ddate')
+      .order('field')
+      .range(from, to)
+  );
+
+  const byYear = new Map<number, CanonicalYearFacts>();
+  for (const row of data) {
+    const year = yearFromFundamentalRow(row);
+    if (year === null) continue;
+
+    const field = row.field as CanonicalField;
+    const qtrs = Number(row.qtrs);
+    const isAssets = field === 'total_assets';
+    if (isAssets ? qtrs !== 0 : qtrs !== 4) continue;
+
+    const value =
+      row.value === null || row.value === undefined ? null : Number(row.value);
+
+    const facts = byYear.get(year) ?? {};
+    facts[field] = value;
+    byYear.set(year, facts);
+  }
+  return byYear;
+}
 
 // --- Company search list ---
 
@@ -297,14 +353,9 @@ export function peekStatements(adsh: string): Statements | null {
 }
 
 /**
- * Per-year Overview metrics for a company, one row per annual filing,
- * reconstructed from each filing's statements. Sorted oldest -> newest.
- *
- * Single round trip: the `annual_line_items` view joins `filing` + `line_item`,
- * so every annual filing's rows arrive in one request keyed by `cik` — instead
- * of a `filing` query followed by a dependent per-filing `line_item` query.
- * Rows are also written into the shared per-adsh cache so the Statements tab
- * stays instant once the Overview has loaded.
+ * Per-year Overview metrics for a company, one row per fact year.
+ * Line-item tags fill most metrics; the five warehouse canonical fields overlay
+ * from `fundamentals` when present (CIK-scoped, latest restatement).
  */
 export async function getAnnualOverview(cik: number): Promise<AnnualOverview[]> {
   // Warm the full filings list in the background (parallel, non-blocking) so the
@@ -312,20 +363,23 @@ export async function getAnnualOverview(cik: number): Promise<AnnualOverview[]> 
   // annual view only carries annual forms, so the picker still needs this.
   void getFilings(cik).catch(() => {});
 
-  const data = await fetchAllRows<AnnualQueryRow>((from, to) =>
-    supabase
-      .from('annual_line_items')
-      .select('adsh, form, period, fy, fp, filed, stmt, line, plabel, tag, value, uom, qtrs, ddate')
-      .eq('cik', cik)
-      .in('stmt', STATEMENT_CODES)
-      .order('line')
-      .order('ddate')
-      .order('adsh')
-      .order('tag')
-      .order('uom')
-      .order('qtrs')
-      .range(from, to)
-  );
+  const [data, canonicalByYear] = await Promise.all([
+    fetchAllRows<AnnualQueryRow>((from, to) =>
+      supabase
+        .from('annual_line_items')
+        .select('adsh, form, period, fy, fp, filed, stmt, line, plabel, tag, value, uom, qtrs, ddate')
+        .eq('cik', cik)
+        .in('stmt', STATEMENT_CODES)
+        .order('line')
+        .order('ddate')
+        .order('adsh')
+        .order('tag')
+        .order('uom')
+        .order('qtrs')
+        .range(from, to)
+    ),
+    fetchCanonicalByYear(cik).catch(() => new Map<number, CanonicalYearFacts>()),
+  ]);
 
   if (data.length === 0) return [];
 
@@ -374,7 +428,9 @@ export async function getAnnualOverview(cik: number): Promise<AnnualOverview[]> 
     // Warm the Statements-tab cache for this filing.
     if (!lineItemsCache.has(filing.adsh)) lineItemsCache.set(filing.adsh, rows);
     const o = buildAnnualOverview(filing, rows);
-    if (o && !byYear.has(o.year)) byYear.set(o.year, o);
+    if (!o) continue;
+    const merged = mergeCanonicalFacts(o, canonicalByYear.get(o.year));
+    if (!byYear.has(merged.year)) byYear.set(merged.year, merged);
   }
   return Array.from(byYear.values()).sort((a, b) => a.year - b.year);
 }
