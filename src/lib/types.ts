@@ -42,6 +42,16 @@ export interface StatementSection {
 
 export type Statements = Record<StatementCode, StatementSection>;
 
+export type CanonicalField =
+  | 'revenue'
+  | 'operating_expenses'
+  | 'net_income'
+  | 'total_assets'
+  | 'operating_cash_flow';
+
+/** Canonical KPI values for one fact year (from the `fundamentals` view). */
+export type CanonicalYearFacts = Partial<Record<CanonicalField, number | null>>;
+
 // Derived per-year metrics for the dashboard Overview, reconstructed from the
 // full `line_item` statements of each annual (10-K) filing.
 export interface AnnualOverview {

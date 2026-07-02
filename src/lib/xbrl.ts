@@ -11,6 +11,7 @@ import {
   FilingMeta,
   Statements,
   AnnualOverview,
+  CanonicalYearFacts,
 } from './types';
 
 // A line_item row plus its statement code. The unit the interpreter operates on.
@@ -288,20 +289,50 @@ function sumTags(m: Map<string, number>, tags: string[]): number | null {
   return found ? sum : null;
 }
 
+/** Fact year from statement rows — when the numbers apply, not filing.fy/period. */
+export function resolveFactYear(rows: RawLineItem[]): number | null {
+  const ddates = rows.filter((r) => r.qtrs === 4).map((r) => r.ddate);
+  const source = ddates.length > 0 ? ddates : rows.filter((r) => r.qtrs === 0).map((r) => r.ddate);
+  if (source.length === 0) return null;
+  const year = parseInt(source.sort().at(-1)!.slice(0, 4), 10);
+  return Number.isNaN(year) ? null : year;
+}
+
+/** Prefer warehouse canonical facts; keep line_item-derived values as fallback. */
+export function mergeCanonicalFacts(
+  overview: AnnualOverview,
+  canonical: CanonicalYearFacts | undefined
+): AnnualOverview {
+  if (!canonical) return overview;
+
+  const revenue = canonical.revenue ?? overview.revenue;
+  const operatingExpense = canonical.operating_expenses ?? overview.operatingExpense;
+  const netIncome = canonical.net_income ?? overview.netIncome;
+  const totalAssets = canonical.total_assets ?? overview.totalAssets;
+  const operatingCashFlow = canonical.operating_cash_flow ?? overview.operatingCashFlow;
+
+  const netProfitMargin =
+    revenue && netIncome !== null ? (netIncome / revenue) * 100 : overview.netProfitMargin;
+
+  return {
+    ...overview,
+    revenue,
+    operatingExpense,
+    netIncome,
+    totalAssets,
+    operatingCashFlow,
+    netProfitMargin,
+  };
+}
+
 /**
  * Per-year Overview metrics for one annual filing, reconstructed from that
  * filing's full statement rows. Pure: hand it the filing meta and its rows.
  * Returns null when the fiscal year can't be determined.
  */
 export function buildAnnualOverview(filing: FilingMeta, rows: RawLineItem[]): AnnualOverview | null {
-  const yearStr = (filing.period ?? '').slice(0, 4);
-  let year = parseInt(yearStr, 10);
-  if (isNaN(year)) {
-    const ddates = rows.filter((r) => r.qtrs === 4).map((r) => r.ddate);
-    if (ddates.length === 0) return null;
-    year = parseInt(ddates.sort().at(-1)!.slice(0, 4), 10);
-  }
-  if (isNaN(year)) return null;
+  const year = resolveFactYear(rows);
+  if (year === null) return null;
 
   const is = buildTagMap(rows, (r) => r.stmt === 'IS' && r.qtrs === 4);
   const bs = buildTagMap(rows, (r) => r.stmt === 'BS' && r.qtrs === 0);
